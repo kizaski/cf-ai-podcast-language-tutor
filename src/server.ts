@@ -11,8 +11,7 @@ import {
   createUIMessageStream,
   convertToModelMessages,
   createUIMessageStreamResponse,
-  type ToolSet,
-  type UIMessage
+  type ToolSet
 } from "ai";
 // import { openai } from "@ai-sdk/openai";
 import { processToolCalls, cleanupMessages } from "./utils";

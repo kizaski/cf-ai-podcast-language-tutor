@@ -11,7 +11,8 @@ import {
   createUIMessageStream,
   convertToModelMessages,
   createUIMessageStreamResponse,
-  type ToolSet
+  type ToolSet,
+  type UIMessage
 } from "ai";
 // import { openai } from "@ai-sdk/openai";
 import { processToolCalls, cleanupMessages } from "./utils";
@@ -89,6 +90,7 @@ If the user asks to schedule a task, use the schedule tool to schedule the task.
 
     return createUIMessageStreamResponse({ stream });
   }
+
   async executeTask(description: string, _task: Schedule<string>) {
     await this.saveMessages([
       ...this.messages,
@@ -109,6 +111,22 @@ If the user asks to schedule a task, use the schedule tool to schedule the task.
   }
 }
 
+export function getSessionId(request: Request): string | null {
+  const cookieHeader = request.headers.get("Cookie");
+  if (!cookieHeader) return null;
+
+  const cookies = cookieHeader
+    .split(";")
+    .map((c) => c.trim())
+    .map((c) => c.split("="));
+
+  const session = cookies.find(([name]) => name === "session_id");
+  if (!session) return null;
+
+  const [, value] = session;
+  return value ? decodeURIComponent(value) : null;
+}
+
 /**
  * Worker entry point that routes incoming requests to the appropriate handler
  */
@@ -116,16 +134,42 @@ export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext) {
     const url = new URL(request.url);
 
+    // 1. Handle non-agent routes FIRST
     if (url.pathname === "/test") {
-      return Response.json({
-        success: true
-      });
+      return Response.json({ success: true });
     }
 
-    return (
-      // Route the request to our agent or return 404 if not found
-      (await routeAgentRequest(request, env)) ||
-      new Response("Not found", { status: 404 })
-    );
+    // 2. Get or create session
+    let sessionId = getSessionId(request);
+    let isNewSession = false;
+
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
+      isNewSession = true;
+    }
+
+    // 3. Rewrite URL for agent routing
+    const agentUrl = new URL(request.url);
+    const originalPath = url.pathname.replace(/^\/+/, ""); // remove leading slash
+    // If original path was /agents/chat/default/get-messages, extract the last segment
+    const lastSegment = originalPath.split("/").pop();
+    agentUrl.pathname = `/agents/chat/${sessionId}/${lastSegment ?? ""}`;
+
+    const agentRequest = new Request(agentUrl.toString(), request);
+
+    let response =
+      (await routeAgentRequest(agentRequest, env)) ??
+      new Response("Not found", { status: 404 });
+
+    // 4. Persist session via cookie
+    if (isNewSession) {
+      response = new Response(response.body, response);
+      response.headers.append(
+        "Set-Cookie",
+        `session_id=${sessionId}; Path=/; HttpOnly; SameSite=Lax`
+      );
+    }
+
+    return response;
   }
 } satisfies ExportedHandler<Env>;

@@ -27,8 +27,9 @@ export default function Chat() {
   const textarea = useTextareaAutoResize();
 
   return (
-    <div className="h-screen w-full p-4 flex justify-center items-center bg-fixed overflow-hidden">
-      <div className="h-[calc(100vh-2rem)] w-full mx-auto max-w-lg flex flex-col shadow-xl rounded-md overflow-hidden relative border border-neutral-300 dark:border-neutral-800">
+    <div className="h-screen w-full p-4 flex flex-wrap justify-center items-center bg-fixed overflow-y-auto md:overflow-hidden">
+      <div className="w-full md:h-[calc(100vh-2rem)] md:overflow-y-auto md:flex-1"></div>
+      <div className="w-full mx-2 max-w-lg flex flex-col shadow-xl rounded-md overflow-hidden relative border border-neutral-300 dark:border-neutral-800 md:h-[calc(100vh-2rem)]">
         <ChatHeader
           theme={theme}
           toggleTheme={toggleTheme}
@@ -57,6 +58,19 @@ export default function Chat() {
               : "Send a message..."
           }
         />
+      </div>
+
+      <div className="w-full md:h-[calc(100vh-2rem)] md:overflow-y-auto md:flex-1">
+        <div className="sticky top-0 left-0 right-0 w-full p-5">
+          <div className="p-8">
+            <h1 className="text-2xl font-bold mb-4">
+              Audio Player with Inserts
+            </h1>
+            {/* TODO -- audio player */}
+          </div>
+        </div>
+        {/* TODO -- transcript */}
+        <div className="h-[200vh]">TEST</div>
       </div>
     </div>
   );

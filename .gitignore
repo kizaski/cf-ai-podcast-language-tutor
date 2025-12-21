@@ -148,3 +148,5 @@ dist
 !.env.example
 
 *.ignore.md
+
+public/ignore-public/

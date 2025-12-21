@@ -10,7 +10,7 @@ export function ChatHeader({
   clearHistory
 }: any) {
   return (
-    <div className="px-4 py-3 border-b border-neutral-300 dark:border-neutral-800 flex items-center gap-3 sticky top-0 z-10">
+    <div className="px-4 py-3 dark:bg-neutral-950 bg-neutral-50 border-b border-neutral-300 dark:border-neutral-800 flex items-center gap-3 sticky top-0 z-10">
       <div className="flex items-center justify-center h-8 w-8">
         <svg
           width="28px"

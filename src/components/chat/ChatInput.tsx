@@ -25,7 +25,7 @@ export function ChatInput({
   return (
     <form
       onSubmit={onSubmit}
-      className="p-3 bg-neutral-50 absolute bottom-0 left-0 right-0 z-10 border-t border-neutral-300 dark:border-neutral-800 dark:bg-neutral-900"
+      className="p-3 bg-neutral-50 relative bottom-0 left-0 right-0 z-10 border-t border-neutral-300 dark:border-neutral-800 dark:bg-neutral-900"
     >
       <div className="flex items-center gap-2">
         <div className="flex-1 relative">

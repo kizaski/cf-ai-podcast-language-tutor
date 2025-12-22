@@ -6,12 +6,16 @@ interface PlayerControlsProps {
   playbackState: PlaybackState;
   onPlayPause: () => void;
   onSeek: (time: number) => void;
+  onStop?: () => void;
   onSkipBackward: () => void;
   onSkipForward: () => void;
   onVolumeChange: (value: number) => void;
   onPlaybackRateChange: (rate: number) => void;
+  onToggleInserts: () => void;
   inserts: any[];
   getInsertColor: (type: string) => string;
+  isLoading?: boolean;
+  hasLoaded?: boolean;
 }
 
 export const PlayerControls = ({
@@ -19,13 +23,24 @@ export const PlayerControls = ({
   playbackState,
   onPlayPause,
   onSeek,
+  onStop,
   onSkipBackward,
   onSkipForward,
   onVolumeChange,
   onPlaybackRateChange,
+  onToggleInserts,
   inserts,
-  getInsertColor
+  getInsertColor,
+  isLoading = false,
+  hasLoaded = false
 }: PlayerControlsProps) => {
+  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickPosition = (e.clientX - rect.left) / rect.width;
+    const newTime = clickPosition * episode.duration;
+    onSeek(newTime);
+  };
+
   return (
     <div className="bg-neutral-100 dark:bg-neutral-800 rounded-lg p-6 mb-6">
       <div className="flex items-center justify-between mb-4">
@@ -35,33 +50,94 @@ export const PlayerControls = ({
             {formatTime(playbackState.currentTime)} /{" "}
             {formatTime(episode.duration)}
           </p>
+          {isLoading && (
+            <div className="mt-2">
+              <div className="w-full bg-neutral-300 dark:bg-neutral-700 rounded-full h-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: "50%" }} // This would come from loadProgress
+                />
+              </div>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                Loading audio...
+              </p>
+            </div>
+          )}
+          {!hasLoaded && !isLoading && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+              Audio not loaded. Click play to load.
+            </p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={onToggleInserts}
+            className={`px-3 py-2 rounded-lg transition ${
+              playbackState.activeInserts.length > 0
+                ? "bg-blue-600 text-white"
+                : "bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300"
+            } ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
+            disabled={isLoading}
+          >
+            {playbackState.activeInserts.length > 0
+              ? "Inserts On"
+              : "Inserts Off"}
+          </button>
+          {onStop && (
+            <button
+              onClick={onStop}
+              className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!playbackState.isPlaying || isLoading}
+            >
+              Stop
+            </button>
+          )}
         </div>
       </div>
 
       {/* Progress Bar with Insert Markers */}
       <div className="space-y-4">
-        <div className="relative h-2 bg-neutral-300 dark:bg-neutral-700 rounded-full">
+        <div
+          className="relative h-2 bg-neutral-300 dark:bg-neutral-700 rounded-full cursor-pointer"
+          onClick={handleProgressClick}
+        >
           {/* Insert markers */}
           {inserts
-            .filter((insert) => insert.enabled)
+            .filter((insert) => insert.enabled && insert.hasLoaded !== false)
             .map((insert) => (
               <div
                 key={insert.id}
-                className="absolute top-1/2 transform -translate-y-1/2 w-3 h-3 rounded-full cursor-pointer"
-                style={{
-                  left: `${(insert.startTime / episode.duration) * 100}%`,
-                  backgroundColor: getInsertColor(insert.type)
+                className="absolute top-1/2 transform -translate-y-1/2 w-3 h-3 rounded-full cursor-pointer hover:scale-125 transition-transform z-10"
+                style={
+                  {
+                    left: `${(insert.startTime / episode.duration) * 100}%`,
+                    backgroundColor: getInsertColor(insert.type),
+                    boxShadow:
+                      "0 0 0 2px white, 0 0 0 3px var(--tw-shadow-color)",
+                    "--tw-shadow-color": getInsertColor(insert.type)
+                  } as any
+                }
+                title={`${insert.title} (${insert.type}) - Click to seek`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSeek(insert.startTime);
                 }}
-                title={`${insert.title} (${insert.type})`}
-                onClick={() => onSeek(insert.startTime)}
               />
             ))}
 
           {/* Progress fill */}
           <div
-            className="absolute top-0 left-0 h-full bg-blue-600 rounded-full"
+            className="absolute top-0 left-0 h-full bg-blue-600 rounded-full transition-all duration-100"
             style={{
               width: `${(playbackState.currentTime / episode.duration) * 100}%`
+            }}
+          />
+
+          {/* Playhead */}
+          <div
+            className="absolute top-1/2 transform -translate-y-1/2 w-4 h-4 bg-blue-600 rounded-full -ml-2 shadow-lg"
+            style={{
+              left: `${(playbackState.currentTime / episode.duration) * 100}%`
             }}
           />
         </div>
@@ -78,7 +154,8 @@ export const PlayerControls = ({
             <select
               value={playbackState.playbackRate}
               onChange={(e) => onPlaybackRateChange(parseFloat(e.target.value))}
-              className="px-2 py-1 bg-neutral-200 dark:bg-neutral-700 rounded text-sm"
+              className="px-2 py-1 bg-neutral-200 dark:bg-neutral-700 rounded text-sm disabled:opacity-50"
+              disabled={isLoading}
             >
               <option value="0.5">0.5x</option>
               <option value="0.75">0.75x</option>
@@ -92,19 +169,26 @@ export const PlayerControls = ({
           <div className="flex gap-4">
             <button
               onClick={onSkipBackward}
-              className="p-3 rounded-full bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 transition"
+              className="p-3 rounded-full bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isLoading}
             >
               ⏮
             </button>
             <button
               onClick={onPlayPause}
-              className="p-4 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition"
+              className="p-4 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed min-w-[56px] flex items-center justify-center"
+              disabled={isLoading}
             >
-              {playbackState.isPlaying ? "⏸" : "▶"}
+              {playbackState.isPlaying ? (
+                <span className="inline-block">⏸</span>
+              ) : (
+                <span className="inline-block">▶</span>
+              )}
             </button>
             <button
               onClick={onSkipForward}
-              className="p-3 rounded-full bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 transition"
+              className="p-3 rounded-full bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isLoading}
             >
               ⏭
             </button>
@@ -119,7 +203,8 @@ export const PlayerControls = ({
               step="0.01"
               value={playbackState.volume}
               onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
-              className="w-24"
+              className="w-24 disabled:opacity-50"
+              disabled={isLoading}
             />
           </div>
         </div>

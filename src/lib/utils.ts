@@ -24,3 +24,20 @@ export const getInsertColor = (type: string): string => {
   };
   return colors[type] || "#6b7280"; // default gray
 };
+
+// Audio context singleton
+let audioContextInstance: AudioContext | null = null;
+
+export const getAudioContext = (): AudioContext => {
+  if (!audioContextInstance) {
+    audioContextInstance = new window.AudioContext();
+  }
+  return audioContextInstance;
+};
+
+export const decodeAudioBuffer = async (url: string): Promise<AudioBuffer> => {
+  const audioContext = getAudioContext();
+  const response = await fetch(url);
+  const arrayBuffer = await response.arrayBuffer();
+  return await audioContext.decodeAudioData(arrayBuffer);
+};

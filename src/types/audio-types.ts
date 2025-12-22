@@ -6,6 +6,8 @@ export interface Insert {
   duration: number;
   startTime: number;
   endTime: number;
+  audioBuffer?: AudioBuffer;
+  hasLoaded: boolean;
   enabled: boolean;
   metadata: Record<string, any>;
 }
@@ -25,6 +27,7 @@ export interface Episode {
   audioUrl: string;
   publishedDate: string;
   description: string;
+  audioBuffer?: AudioBuffer;
 }
 
 export interface PlaybackState {
@@ -33,6 +36,22 @@ export interface PlaybackState {
   volume: number;
   playbackRate: number;
   activeInserts: string[];
+}
+
+export interface EpisodeData {
+  episode: Episode;
+  inserts: Insert[];
+  transcript: TranscriptSegment[];
+}
+
+export interface PlaybackState {
+  currentTime: number;
+  isPlaying: boolean;
+  volume: number;
+  playbackRate: number;
+  activeInserts: string[];
+  playbackStartTime?: number;
+  lastPauseTime?: number;
 }
 
 export interface EpisodeData {

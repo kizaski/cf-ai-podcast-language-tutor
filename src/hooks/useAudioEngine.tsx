@@ -147,6 +147,7 @@ export const useAudioEngine = ({
 
     // Stop main audio source
     if (nodesRef.current.mainSource) {
+      nodesRef.current.mainSource.onended = null;
       try {
         nodesRef.current.mainSource.stop();
       } catch (e) {
@@ -157,6 +158,7 @@ export const useAudioEngine = ({
 
     // Stop insert audio source
     if (nodesRef.current.insertSource) {
+      nodesRef.current.insertSource.onended = null;
       try {
         nodesRef.current.insertSource.stop();
       } catch (e) {

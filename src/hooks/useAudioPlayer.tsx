@@ -5,6 +5,8 @@ import type { EpisodeData, PlaybackState, Insert } from "@/types/audio-types";
 // Mock audio URLs - replace with real audio files in production
 const MOCK_AUDIO_BASE_URL = "ignore-public/APO6849342593.mp3";
 const MOCK_INSERT_AUDIO_URL = "ignore-public/section_1_intro.wav";
+const MOCK_INSERT_AUDIO_URLo = "ignore-public/section_1_outro.mp3";
+const MOCK_INSERT_AUDIO_URL2i = "ignore-public/section_2_intro.mp3";
 
 const createMockEpisodeData = (): EpisodeData => ({
   episode: {
@@ -30,40 +32,39 @@ const createMockEpisodeData = (): EpisodeData => ({
         category: "branding",
         version: "v2",
         creator: "studio_team"
-      },
-      hasLoaded: false
+      }
     },
     {
       id: "insert_2",
       type: "primer_outro",
       title: "Closing Remarks",
-      audioUrl: MOCK_INSERT_AUDIO_URL,
+      audioUrl: MOCK_INSERT_AUDIO_URLo,
       duration: 15,
-      startTime: 2633,
-      endTime: 2648,
+      startTime: 120,
+      endTime: 135,
       enabled: true,
       metadata: {
         category: "cta",
         version: "v1",
         creator: "host"
-      },
-      hasLoaded: false
+      }
+      // hasLoaded: false
     },
     {
       id: "insert_3",
       type: "ad",
       title: "Sponsor Message",
-      audioUrl: MOCK_INSERT_AUDIO_URL,
+      audioUrl: MOCK_INSERT_AUDIO_URL2i,
       duration: 20,
-      startTime: 900,
-      endTime: 920,
+      startTime: 60,
+      endTime: 75,
       enabled: true,
       metadata: {
         category: "monetization",
         sponsor: "TechCorp",
         campaign: "Q1_2024"
-      },
-      hasLoaded: false
+      }
+      // hasLoaded: false
     }
   ],
   transcript: [
@@ -347,7 +348,7 @@ export const useEnhancedAudioPlayer = (initialData?: EpisodeData) => {
                 ...loadedEpisodeData,
                 inserts: [
                   ...loadedEpisodeData.inserts,
-                  { ...newInsert, audioBuffer, hasLoaded: true }
+                  { ...newInsert, audioBuffer } //, hasLoaded}
                 ]
               });
             }
@@ -373,7 +374,7 @@ export const useEnhancedAudioPlayer = (initialData?: EpisodeData) => {
         startTime: time,
         endTime: time + 60,
         enabled: true,
-        hasLoaded: false,
+        // hasLoaded: false,
         metadata: {
           category: "custom",
           created: new Date().toISOString()

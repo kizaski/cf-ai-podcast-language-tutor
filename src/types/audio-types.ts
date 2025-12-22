@@ -7,7 +7,7 @@ export interface Insert {
   startTime: number;
   endTime: number;
   audioBuffer?: AudioBuffer;
-  hasLoaded: boolean;
+  // hasLoaded: boolean;
   enabled: boolean;
   metadata: Record<string, any>;
 }

@@ -103,7 +103,7 @@ export const PlayerControls = ({
         >
           {/* Insert markers */}
           {inserts
-            .filter((insert) => insert.enabled && insert.hasLoaded !== false)
+            .filter((insert) => insert.enabled) // && insert.hasLoaded !== false)
             .map((insert) => (
               <div
                 key={insert.id}
@@ -176,7 +176,7 @@ export const PlayerControls = ({
             </button>
             <button
               onClick={onPlayPause}
-              className="p-4 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed min-w-[56px] flex items-center justify-center"
+              className="p-4 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed min-w-14 flex items-center justify-center"
               disabled={isLoading}
             >
               {playbackState.isPlaying ? (

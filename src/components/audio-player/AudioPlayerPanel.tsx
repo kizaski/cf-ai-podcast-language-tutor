@@ -97,6 +97,7 @@ export const AudioPlayerPanel = ({ initialData }: AudioPlayerPanelProps) => {
                     endTime: playbackState.currentTime + 60,
                     enabled: true,
                     metadata: {}
+                    // hasLoaded: false
                   })
                 }
               />

@@ -2,7 +2,13 @@ import { MessageItem } from "./MessageItem";
 import { EmptyState } from "./EmptyState";
 import { formatTime } from "@/lib/utils";
 
-export function MessageList({ messages, showDebug, endRef }: any) {
+export function MessageList({
+  messages,
+  showDebug,
+  endRef,
+  addToolOutput,
+  toolsRequiringConfirmation
+}: any) {
   if (!messages.length) return <EmptyState />;
 
   return (
@@ -14,6 +20,8 @@ export function MessageList({ messages, showDebug, endRef }: any) {
           previous={messages[i - 1]}
           showDebug={showDebug}
           formatTime={formatTime}
+          addToolOutput={addToolOutput}
+          toolsRequiringConfirmation={toolsRequiringConfirmation}
         />
       ))}
       <div ref={endRef} />

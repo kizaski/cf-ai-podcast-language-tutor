@@ -10,7 +10,7 @@ interface MessageItemProps {
   showDebug?: boolean;
   formatTime: (date: Date) => string;
   toolsRequiringConfirmation?: string[];
-  addToolResult?: (params: {
+  addToolOutput?: (params: {
     tool: string;
     toolCallId: string;
     output: any;
@@ -23,7 +23,7 @@ export function MessageItem({
   showDebug,
   formatTime,
   toolsRequiringConfirmation = [],
-  addToolResult
+  addToolOutput
 }: MessageItemProps) {
   const isUser = message.role === "user";
   const showAvatar = !previous || previous.role !== message.role;
@@ -97,7 +97,7 @@ export function MessageItem({
                   const needsConfirmation =
                     toolsRequiringConfirmation.includes(toolName);
 
-                  if (addToolResult) {
+                  if (addToolOutput) {
                     return (
                       <ToolInvocationCard
                         key={`${toolCallId}-${i}`}
@@ -105,14 +105,15 @@ export function MessageItem({
                         toolCallId={toolCallId}
                         needsConfirmation={needsConfirmation}
                         onSubmit={({ toolCallId, result }) => {
-                          addToolResult({
+                          // TODO -- fix approve/reject button actions (currently empty result)
+                          addToolOutput({
                             tool: part.type.replace("tool-", ""),
                             toolCallId,
                             output: result
                           });
                         }}
                         addToolResult={(toolCallId, result) => {
-                          addToolResult({
+                          addToolOutput({
                             tool: part.type.replace("tool-", ""),
                             toolCallId,
                             output: result

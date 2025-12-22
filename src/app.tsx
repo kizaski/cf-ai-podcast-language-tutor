@@ -17,8 +17,10 @@ export default function Chat() {
     // sendMessage,
     clearHistory,
     stop,
+    addToolOutput,
     status,
     pendingToolConfirmation,
+    toolsRequiringConfirmation,
     handleAgentInputChange,
     handleAgentSubmit,
     agentInput
@@ -46,6 +48,8 @@ export default function Chat() {
               messages={messages}
               showDebug={showDebug}
               endRef={endRef}
+              addToolOutput={addToolOutput}
+              toolsRequiringConfirmation={toolsRequiringConfirmation}
             />
           </div>
 
@@ -66,6 +70,7 @@ export default function Chat() {
           />
         </div>
 
+        {/* <AudioPlayerPanel initialData={} /> */}
         <AudioPlayerPanel />
       </div>
     </div>

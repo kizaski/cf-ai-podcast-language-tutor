@@ -47,6 +47,7 @@ export const useAudioEngine = ({
   const playedInsertsRef = useRef<Set<string>>(new Set());
 
   // Active inserts that should be played
+  // const activeInsertsRef = useRef<Set<string>>(new Set(episodeData.inserts)); // -- bug fix?, on first seek no insert is played
   const activeInsertsRef = useRef<Set<string>>(new Set());
 
   // Initialize audio context

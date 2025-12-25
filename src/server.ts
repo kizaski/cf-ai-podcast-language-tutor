@@ -1,7 +1,5 @@
 import { routeAgentRequest, type Schedule } from "agents";
 
-import { getSchedulePrompt } from "agents/schedule";
-
 import { AIChatAgent } from "agents/ai-chat-agent";
 import {
   generateId,
@@ -67,8 +65,6 @@ export class Chat extends AIChatAgent<Env> {
         const result = streamText({
           system: `You are a helpful assistant that can do various tasks... 
 
-${getSchedulePrompt({ date: new Date() })}
-
 If the user asks to schedule a task, use the schedule tool to schedule the task.
 `,
 
@@ -126,6 +122,59 @@ export function getSessionId(request: Request): string | null {
   return value ? decodeURIComponent(value) : null;
 }
 
+export async function handleAudioUpload(request: Request, env: Env) {
+  try {
+    const formData = await request.formData();
+    const file = formData.get("audio") as File | null;
+
+    if (!file) {
+      return Response.json(
+        { error: "No audio file provided." },
+        { status: 400 }
+      );
+    }
+
+    // Optional: check file type
+    if (!file.type.startsWith("audio/")) {
+      return Response.json(
+        { error: "Invalid audio file type." },
+        { status: 400 }
+      );
+    }
+
+    // Optional: check size (example 100MB max)
+    const MAX_SIZE = 100 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      return Response.json({ error: "Audio file too large." }, { status: 400 });
+    }
+
+    // Store in R2
+    const arrayBuffer = await file.arrayBuffer();
+    const fileName = `audio-${Date.now()}-${file.name}`;
+
+    // TODO -- r2 for audio
+    // await env.R2_BUCKET.put(fileName, arrayBuffer, {
+    //   httpMetadata: {
+    //     contentType: file.type
+    //   }
+    // });
+
+    // return Response.json({
+    //   message: "Audio uploaded successfully",
+    //   fileName,
+    //   size: file.size
+    // });
+    return Response.json({
+      message: "TODO",
+      fileName,
+      size: file.size
+    });
+  } catch (err) {
+    console.error("Upload error:", err);
+    return Response.json({ error: "Upload failed" }, { status: 500 });
+  }
+}
+
 /**
  * Worker entry point that routes incoming requests to the appropriate handler
  */
@@ -133,12 +182,12 @@ export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext) {
     const url = new URL(request.url);
 
-    // 1. Handle non-agent routes FIRST
+    // Handle non-agent routes FIRST
     if (url.pathname === "/test") {
       return Response.json({ success: true });
     }
 
-    // 2. Get or create session
+    // Get or create session
     let sessionId = getSessionId(request);
     let isNewSession = false;
 
@@ -147,7 +196,12 @@ export default {
       isNewSession = true;
     }
 
-    // 3. Rewrite URL for agent routing
+    // Handle audio uploads
+    if (url.pathname.startsWith("/api/episodes/upload-audio")) {
+      return handleAudioUpload(request, env);
+    }
+
+    // Rewrite URL for agent routing
     const agentUrl = new URL(request.url);
     const originalPath = url.pathname.replace(/^\/+/, ""); // remove leading slash
     // If original path was /agents/chat/default/get-messages, extract the last segment
@@ -158,12 +212,13 @@ export default {
 
     let response =
       (await routeAgentRequest(agentRequest, env)) ??
+      (await env.ASSETS.fetch(request)) ??
       new Response("Not found", { status: 404 });
 
-    // 4. Persist session via cookie
+    // Persist session via cookie
     if (isNewSession) {
       response = new Response(response.body, response);
-      response.headers.append(
+      response.headers.set(
         "Set-Cookie",
         `session_id=${sessionId}; Path=/; HttpOnly; SameSite=Lax`
       );

@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { Episode, EpisodeData, Insert } from "@/types/audio-types";
-
-// not yet used ...
+import type { EpisodeData } from "@/types/audio-types";
 
 const API_BASE_URL = import.meta.env.NEXT_PUBLIC_API_BASE_URL || "";
 
@@ -10,30 +8,29 @@ type UseEpisodeParams = {
   initialData?: EpisodeData;
 };
 
-export const useEpisode = ({ episodeId, initialData }: UseEpisodeParams) => {
+export const useEpisode = ({
+  episodeId,
+  initialData
+}: UseEpisodeParams = {}) => {
   const [episode, setEpisode] = useState<EpisodeData | null>(
     initialData ?? null
   );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
 
   const fetchEpisode = useCallback(async (id: string) => {
     setIsLoading(true);
     setError(null);
-
     try {
       const res = await fetch(`${API_BASE_URL}/api/episodes/${id}`);
-      if (!res.ok) {
+      if (!res.ok)
         throw new Error(`Failed to fetch episode: ${res.statusText}`);
-      }
-
       const data: EpisodeData = await res.json();
       setEpisode(data);
       return data;
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to load episode";
-      setError(message);
+      setError(err instanceof Error ? err.message : "Failed to load episode");
       throw err;
     } finally {
       setIsLoading(false);
@@ -45,150 +42,65 @@ export const useEpisode = ({ episodeId, initialData }: UseEpisodeParams) => {
     fetchEpisode(episodeId);
   }, [episodeId, initialData, fetchEpisode]);
 
-  const saveEpisode = useCallback(
-    async (data: EpisodeData) => {
+  /** Upload first, create episode, and return new episodeId */
+  const uploadAndCreateEpisode = useCallback(
+    async (
+      file: File,
+      durationSeconds: number,
+      onProgress?: (percent: number) => void
+    ) => {
       setIsLoading(true);
       setError(null);
 
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/episodes`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data)
-        });
+      return new Promise<string>((resolve, reject) => {
+        const formData = new FormData();
+        formData.append("audio", file);
+        formData.append("durationSeconds", durationSeconds.toString());
 
-        if (!res.ok) {
-          throw new Error("Failed to save episode");
-        }
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `${API_BASE_URL}/api/episodes/upload-audio`);
 
-        const result: Episode = await res.json();
-
-        if (result.id) {
-          await fetchEpisode(result.id);
-        }
-
-        return result;
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Failed to save episode";
-        setError(message);
-        throw err;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [fetchEpisode]
-  );
-
-  const updateInsert = useCallback(
-    async (insertId: string, updates: Partial<Insert>) => {
-      if (!episode) return;
-
-      setError(null);
-
-      try {
-        const res = await fetch(
-          `${API_BASE_URL}/api/episodes/${episode.episode.id}/inserts/${insertId}`,
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(updates)
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable && onProgress) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            onProgress(percent);
+            setProgress(percent);
           }
-        );
+        };
 
-        if (!res.ok) {
-          throw new Error("Failed to update insert");
-        }
-
-        const result: any = await res.json();
-
-        // Server is source of truth, but we can safely patch locally
-        if (result.success) {
-          setEpisode((prev) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              inserts: prev.inserts.map((insert) =>
-                insert.id === insertId ? { ...insert, ...updates } : insert
-              )
-            };
-          });
-        }
-
-        return result;
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Failed to update insert";
-        setError(message);
-        throw err;
-      }
-    },
-    [episode]
-  );
-
-  const addInsert = useCallback(
-    async (newInsert: Insert) => {
-      if (!episode) return;
-
-      setError(null);
-
-      try {
-        const res = await fetch(
-          `${API_BASE_URL}/api/episodes/${episode.episode.id}/inserts`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(newInsert)
+        xhr.onload = () => {
+          setIsLoading(false);
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const res = JSON.parse(xhr.responseText);
+              const newEpisodeId = res.episodeId;
+              resolve(newEpisodeId);
+            } catch (err) {
+              reject(err);
+            }
+          } else {
+            reject(new Error(`Upload failed: ${xhr.statusText}`));
           }
-        );
+        };
 
-        if (!res.ok) {
-          throw new Error("Failed to add insert");
-        }
+        xhr.onerror = () => {
+          setIsLoading(false);
+          reject(new Error("Upload failed"));
+        };
 
-        const savedInsert: Insert = await res.json();
-
-        setEpisode((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            inserts: [...prev.inserts, savedInsert]
-          };
-        });
-
-        return savedInsert;
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Failed to add insert";
-        setError(message);
-        throw err;
-      }
+        xhr.send(formData);
+      });
     },
-    [episode]
+    []
   );
-
-  const listEpisodes = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/episodes`);
-      if (!res.ok) {
-        throw new Error(`Failed to list episodes: ${res.statusText}`);
-      }
-      return await res.json();
-    } catch (err) {
-      throw err;
-    }
-  }, []);
 
   return {
     episode,
     setEpisode,
     isLoading,
     error,
-
     fetchEpisode,
-    saveEpisode,
-    updateInsert,
-    addInsert,
-    listEpisodes
+    progress,
+    uploadAndCreateEpisode
   };
 };

@@ -2,93 +2,8 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useAudioEngine } from "./useAudioEngine";
 import type { EpisodeData, PlaybackState, Insert } from "@/types/audio-types";
 
-// Mock audio URLs - replace with real audio files in production
-const MOCK_AUDIO_BASE_URL = "ignore-public/APO6849342593.mp3";
-const MOCK_INSERT_AUDIO_URL = "ignore-public/section_1_intro.wav";
-const MOCK_INSERT_AUDIO_URLo = "ignore-public/section_1_outro.mp3";
-const MOCK_INSERT_AUDIO_URL2i = "ignore-public/section_2_intro.mp3";
-
-const createMockEpisodeData = (): EpisodeData => ({
-  episode: {
-    id: "ep_123",
-    title: "The Future of AI in Podcasting",
-    duration: 2723,
-    audioUrl: MOCK_AUDIO_BASE_URL,
-    publishedDate: "2024-01-15",
-    description:
-      "Exploring how artificial intelligence is transforming podcast creation and consumption."
-  },
-  inserts: [
-    {
-      id: "insert_1",
-      type: "primer_intro",
-      title: "Welcome Primer",
-      audioUrl: MOCK_INSERT_AUDIO_URL,
-      duration: 10,
-      startTime: 0,
-      endTime: 10,
-      enabled: true,
-      metadata: {
-        category: "branding",
-        version: "v2",
-        creator: "studio_team"
-      }
-    },
-    {
-      id: "insert_2",
-      type: "primer_outro",
-      title: "Closing Remarks",
-      audioUrl: MOCK_INSERT_AUDIO_URLo,
-      duration: 15,
-      startTime: 120,
-      endTime: 135,
-      enabled: true,
-      metadata: {
-        category: "cta",
-        version: "v1",
-        creator: "host"
-      }
-      // hasLoaded: false
-    },
-    {
-      id: "insert_3",
-      type: "ad",
-      title: "Sponsor Message",
-      audioUrl: MOCK_INSERT_AUDIO_URL2i,
-      duration: 20,
-      startTime: 60,
-      endTime: 75,
-      enabled: true,
-      metadata: {
-        category: "monetization",
-        sponsor: "TechCorp",
-        campaign: "Q1_2024"
-      }
-      // hasLoaded: false
-    }
-  ],
-  transcript: [
-    {
-      id: "transcript_1",
-      startTime: 0,
-      endTime: 300,
-      text: "Welcome to today's episode about AI in podcasting. This technology is revolutionizing how we create and consume audio content.",
-      speaker: "host"
-    },
-    {
-      id: "transcript_2",
-      startTime: 300,
-      endTime: 600,
-      text: "One of the most exciting developments is AI-powered editing tools that can automatically remove filler words and enhance audio quality.",
-      speaker: "host"
-    }
-  ]
-});
-
-export const useEnhancedAudioPlayer = (initialData?: EpisodeData) => {
-  const [episodeData, setEpisodeData] = useState<EpisodeData>(
-    initialData || createMockEpisodeData()
-  );
+export const useEnhancedAudioPlayer = (initialData: EpisodeData) => {
+  const [episodeData, setEpisodeData] = useState<EpisodeData>(initialData);
 
   const [playbackState, setPlaybackState] = useState<PlaybackState>({
     currentTime: 0,
@@ -365,23 +280,9 @@ export const useEnhancedAudioPlayer = (initialData?: EpisodeData) => {
 
   const handleAddInsertAtTime = useCallback(
     (time: number) => {
-      const newInsert: Insert = {
-        id: `insert_${Date.now()}`,
-        type: "primer_intro",
-        title: "New Insert",
-        audioUrl: MOCK_INSERT_AUDIO_URL,
-        duration: 60,
-        startTime: time,
-        endTime: time + 60,
-        enabled: true,
-        // hasLoaded: false,
-        metadata: {
-          category: "custom",
-          created: new Date().toISOString()
-        }
-      };
-
-      handleAddInsert(newInsert);
+      throw new Error(
+        "handleAddInsertAtTime is unimplemented and to be removed."
+      );
     },
     [handleAddInsert]
   );

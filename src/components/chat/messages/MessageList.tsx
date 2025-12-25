@@ -7,9 +7,10 @@ export function MessageList({
   showDebug,
   endRef,
   addToolOutput,
-  toolsRequiringConfirmation
+  toolsRequiringConfirmation,
+  audioFile
 }: any) {
-  if (!messages.length) return <EmptyState />;
+  if (!messages.length) return <EmptyState audioFile={audioFile} />;
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24 max-h-[calc(100vh-10rem)]">

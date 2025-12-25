@@ -5,12 +5,15 @@ import { Transcript } from "./Transcript";
 import { AudioLoadingState } from "./AudioLoadingState";
 import { getInsertColor } from "@/lib/utils";
 import type { EpisodeData } from "@/types/audio-types";
+import { EmptyAudioPlayer } from "./EmptyAudioPlayer";
 
 interface AudioPlayerPanelProps {
   initialData?: EpisodeData;
 }
 
 export const AudioPlayerPanel = ({ initialData }: AudioPlayerPanelProps) => {
+  if (!initialData) return <EmptyAudioPlayer />;
+
   const {
     episodeData,
     playbackState,

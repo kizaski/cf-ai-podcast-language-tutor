@@ -1,5 +1,7 @@
 import { Textarea } from "@/components/textarea/Textarea";
 import { PaperPlaneTilt, Stop } from "@phosphor-icons/react";
+import { useRef } from "react";
+import { useEpisode } from "@/hooks/useEpisode";
 
 export function ChatInput({
   value,
@@ -8,14 +10,17 @@ export function ChatInput({
   onStop,
   disabled,
   status,
-  textareaHeight
+  textareaHeight,
+  audioFile
 }: any) {
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Submit on Enter without Shift (allows Shift+Enter for new line)
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault(); // Prevent default new line behavior
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-      // Check if composing (IME input for Asian languages)
+  const { file, duration, onFileChange } = audioFile.props;
+  const { uploadAndCreateEpisode } = useEpisode({});
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
       if (!e.nativeEvent.isComposing) {
         onSubmit(e);
       }
@@ -38,7 +43,32 @@ export function ChatInput({
             onKeyDown={handleKeyDown}
           />
 
-          <div className="absolute bottom-0 right-0 p-2 w-fit flex flex-row justify-end">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            hidden
+            onChange={async (e) => {
+              await onFileChange(e);
+
+              if (file && duration) {
+                uploadAndCreateEpisode(file, duration);
+              }
+            }}
+          />
+
+          <div className="absolute bottom-0 right-0 p-2 w-fit flex flex-col gap-2 justify-end">
+            {/* Upload Button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center justify-center gap-2 text-sm font-medium bg-secondary text-secondary-foreground hover:bg-secondary/90 rounded-full p-1.5 h-fit border border-neutral-200 dark:border-neutral-800"
+              aria-label="Upload files"
+            >
+              📎
+            </button>
+
+            {/* Send / Stop Buttons */}
             {status === "submitted" || status === "streaming" ? (
               <button
                 type="button"

@@ -5,10 +5,19 @@ import { useTextareaAutoResize } from "./hooks/useTextareaAutoResize";
 import { useAutoScroll } from "./hooks/useAutoScroll";
 import { useChatAgent } from "./hooks/useChatAgent";
 import { useTheme } from "./hooks/useTheme";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AudioPlayerPanel } from "./components/audio-player/AudioPlayerPanel";
+import { useEpisode } from "./hooks/useEpisode";
+import { useParams } from "react-router-dom";
+import { useAudioFile } from "./hooks/useAudioFile";
 
 export default function Chat() {
+  const { episodeId } = useParams<{ episodeId: string }>();
+  const { episode, fetchEpisode } = useEpisode({});
+
+  const audioFileState = useAudioFile();
+  const audioFile = { props: audioFileState };
+
   const { theme, toggleTheme } = useTheme();
   const [showDebug, setShowDebug] = useState(false);
 
@@ -29,10 +38,17 @@ export default function Chat() {
   const endRef = useAutoScroll([messages]);
   const textarea = useTextareaAutoResize();
 
+  // Load episode if episodeId is in URL
+  useEffect(() => {
+    if (episodeId) fetchEpisode(episodeId);
+  }, [episodeId, fetchEpisode]);
+
   return (
     <div className="h-screen w-full p-4 flex justify-center items-center bg-fixed overflow-hidden">
-      <div className="w-full max-w-7xl mx-auto flex gap-6 h-[calc(100vh-2rem)]">
-        {/* Chat Section - Fixed width */}
+      <div
+        className={`w-full max-w-7xl mx-auto flex gap-6 h-[calc(100vh-2rem)] ${!episodeId ? "justify-center" : "justify-start"}`}
+      >
+        {/* Chat Section */}
         <div className="relative w-full md:w-[450px] lg:w-[500px] shrink-0 flex flex-col shadow-xl rounded-md overflow-hidden border border-neutral-300 dark:border-neutral-800">
           <ChatHeader
             theme={theme}
@@ -42,7 +58,7 @@ export default function Chat() {
             clearHistory={clearHistory}
           />
 
-          {/* Chat Messages Area - Takes available space */}
+          {/* Chat Messages Area */}
           <div className="flex-1 relative">
             <MessageList
               messages={messages}
@@ -50,10 +66,11 @@ export default function Chat() {
               endRef={endRef}
               addToolOutput={addToolOutput}
               toolsRequiringConfirmation={toolsRequiringConfirmation}
+              audioFile={audioFile}
             />
           </div>
 
-          {/* Chat Input - Fixed at bottom of chat div */}
+          {/* Chat Input */}
           <ChatInput
             value={agentInput}
             onChange={handleAgentInputChange}
@@ -67,11 +84,12 @@ export default function Chat() {
                 ? "Please respond to the tool confirmation above..."
                 : "Send a message..."
             }
+            audioFile={audioFile}
           />
         </div>
 
-        {/* <AudioPlayerPanel initialData={} /> */}
-        <AudioPlayerPanel />
+        {/* Audio Player Panel if on episode URL / have episode  */}
+        {episodeId && <AudioPlayerPanel initialData={episode ?? undefined} />}
       </div>
     </div>
   );

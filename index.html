@@ -29,12 +29,24 @@
 
     <!-- Prevent flash of unstyled content -->
     <style>
-      html {
+      :root {
+        --background: #f9fafb;
+        --background-dark: #0f0f0f;
+      }
+
+      html,
+      body {
         background: var(--background);
       }
+
+      html.dark,
+      body.dark {
+        background: var(--background-dark);
+      }
+
       @media (prefers-color-scheme: dark) {
         html {
-          background: var(--background);
+          background: var(--background-dark);
         }
       }
     </style>

@@ -58,36 +58,13 @@ export const useAudioEngine = ({
   const playedInsertsRef = useRef<Set<string>>(new Set());
   const activeInsertsRef = useRef<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (!episodeData) return;
-
-    const audioEl = new Audio(
-      `${API_BASE_URL}/api/r2/${encodeURIComponent(episodeData.episode.audioUrl)}`
-    );
-    audioEl.crossOrigin = "anonymous";
-    audioEl.preload = "auto";
-
-    const ctx = new AudioContext();
-    const source = ctx.createMediaElementSource(audioEl);
-    const gain = ctx.createGain();
-
-    source.connect(gain).connect(ctx.destination);
-
-    return () => {
-      source.disconnect();
-      gain.disconnect();
-      ctx.close();
-      audioEl.pause();
-    };
-  }, [episodeData]);
-
   // Initialize AudioContext and main audio element
   useEffect(() => {
     const ctx = new AudioContext();
     audioContextRef.current = ctx;
 
     const audioEl = new Audio(
-      `${API_BASE_URL}/api/r2/${encodeURIComponent(episodeData.episode.audioUrl)}` // TODO -- get from worker
+      `${API_BASE_URL}/api/r2/${encodeURIComponent(episodeData.episode.audioUrl)}`
     );
     audioEl.crossOrigin = "anonymous";
     audioEl.preload = "auto";
@@ -138,11 +115,19 @@ export const useAudioEngine = ({
   );
 
   const playInsert = useCallback((insert: Insert) => {
+    console.log("playing insert...");
+
     const ctx = audioContextRef.current;
     if (!ctx || !insert.audioUrl || !nodesRef.current.mainGain) return;
+    console.log(insert);
 
-    const insertEl = new Audio(insert.audioUrl);
+    const insertEl = new Audio(
+      `${API_BASE_URL}/api/r2/${encodeURIComponent(insert.audioUrl)}`
+    );
+    console.log(insertEl);
+
     insertEl.crossOrigin = "anonymous";
+    insertEl.preload = "auto";
     const insertSource = ctx.createMediaElementSource(insertEl);
     const insertGain = ctx.createGain();
 

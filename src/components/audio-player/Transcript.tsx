@@ -18,7 +18,7 @@ export const Transcript = ({
     <div>
       <h3 className="text-lg font-semibold mb-4">Transcript</h3>
       <div className="space-y-3">
-        {segments.map((segment) => {
+        {segments.map((segment, idx) => {
           const hasInsert = inserts.some(
             (insert) =>
               insert.startTime >= segment.startTime &&
@@ -27,7 +27,7 @@ export const Transcript = ({
 
           return (
             <div
-              key={segment.id}
+              key={`${segment.id}-${idx}`}
               className={`p-4 rounded-lg border cursor-pointer transition hover:bg-neutral-100 dark:hover:bg-neutral-750 ${
                 currentTime >= segment.startTime &&
                 currentTime <= segment.endTime

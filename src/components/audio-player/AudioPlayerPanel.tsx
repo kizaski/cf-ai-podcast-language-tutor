@@ -1,4 +1,8 @@
-import type { EpisodeData, TranscriptSegment } from "@/types/audio-types";
+import type {
+  EpisodeData,
+  TranscriptSegment,
+  Insert
+} from "@/types/audio-types";
 import { EmptyAudioPlayer } from "./EmptyAudioPlayer";
 import { AudioPlayerPanelInner } from "./AudioPlayerPanelInner";
 import { useEffect, type Dispatch, type SetStateAction } from "react";
@@ -14,91 +18,97 @@ export const AudioPlayerPanel = ({
 }: AudioPlayerPanelProps) => {
   if (!initialData) return <EmptyAudioPlayer />;
 
-  // Start transcription when episode is loaded
   useEffect(() => {
-    console.log(initialData);
+    if (!initialData?.episode.audioUrl || !setEpisodeData) return;
 
-    if (!initialData?.episode.audioUrl) return;
+    let abort = false;
 
-    const startTranscription = async () => {
-      try {
-        console.log("starting transcirption...");
+    const startStreams = async () => {
+      // --- 1. Transcription stream ---
+      const transcriptionRes = await fetch(
+        `/api/episodes/${initialData.episode.id}/transcribe-stream`,
+        { headers: { Accept: "text/event-stream" } }
+      );
+      if (!transcriptionRes.ok || !transcriptionRes.body) return;
 
-        const response = await fetch(
-          `/api/episodes/${initialData.episode.id}/transcribe-stream`,
-          {
-            headers: {
-              Accept: "text/event-stream"
-            }
-          }
-        );
-        console.log(response);
+      const transReader = transcriptionRes.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let transBuffer = "";
 
-        if (!response.ok) {
-          throw new Error(`Failed to start transcription: ${response.status}`);
-        }
+      const readTranscription = async () => {
+        while (!abort) {
+          const { done, value } = await transReader.read();
+          if (done) break;
 
-        const reader = response.body?.getReader();
-        if (!reader) {
-          throw new Error("No readable stream available");
-        }
-
-        const decoder = new TextDecoder("utf-8");
-        let buffer = "";
-        while (true) {
-          const { done, value } = await reader.read();
-
-          if (!setEpisodeData) {
-            console.error("no setEpisodeData");
-
-            break;
-          }
-
-          console.log("working...");
-
-          if (done) {
-            console.log("Done");
-
-            break;
-          }
-
-          buffer += decoder.decode(value, { stream: true });
-
-          // Process complete lines
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || ""; // Keep incomplete line in buffer
+          transBuffer += decoder.decode(value, { stream: true });
+          const lines = transBuffer.split("\n");
+          transBuffer = lines.pop() || "";
 
           for (const line of lines) {
-            if (line.trim()) {
-              const newSegment: TranscriptSegment = {
-                text: line.trim(),
-                id: Date.now().toString(),
-                startTime: 0,
-                endTime: 0,
-                speaker: ""
-              };
-              console.log(newSegment);
+            if (!line.trim()) continue;
 
+            const newSegment: TranscriptSegment = {
+              text: line.trim(),
+              id: Date.now().toString(),
+              startTime: 0,
+              endTime: 0,
+              speaker: ""
+            };
+
+            setEpisodeData((prev) => {
+              if (!prev) return prev;
+              return { ...prev, transcript: [...prev.transcript, newSegment] };
+            });
+          }
+        }
+      };
+
+      // --- 2. Inserts stream ---
+      const insertsRes = await fetch(
+        `/api/episodes/${initialData.episode.id}/inserts-stream`,
+        { headers: { Accept: "text/event-stream" } }
+      );
+      if (!insertsRes.ok || !insertsRes.body) return;
+
+      const insertsReader = insertsRes.body.getReader();
+      let insertsBuffer = "";
+
+      const readInserts = async () => {
+        while (!abort) {
+          const { done, value } = await insertsReader.read();
+          if (done) break;
+
+          insertsBuffer += decoder.decode(value, { stream: true });
+          const chunks = insertsBuffer.split("\n");
+          insertsBuffer = chunks.pop() || "";
+
+          for (const chunk of chunks) {
+            if (!chunk.trim()) continue;
+
+            try {
+              console.log(chunk);
+
+              const newInsert: Insert = JSON.parse(chunk);
               setEpisodeData((prev) => {
                 if (!prev) return prev;
-                const updated: EpisodeData | null = {
-                  ...prev,
-                  transcript: [...prev.transcript, newSegment]
-                };
-                return updated;
+                return { ...prev, inserts: [...prev.inserts, newInsert] };
               });
+            } catch (err) {
+              console.error("Failed to parse insert:", err);
             }
           }
         }
-      } catch (error) {
-        console.error("Transcription error:", error);
-      }
+      };
+
+      await Promise.all([readTranscription(), readInserts()]);
     };
 
-    startTranscription();
+    startStreams();
 
-    return () => {};
-  }, [initialData?.episode.id, initialData?.episode.audioUrl]);
+    return () => {
+      abort = true;
+    };
+  }, [initialData?.episode.id, initialData?.episode.audioUrl, setEpisodeData]);
 
   return (
     <AudioPlayerPanelInner

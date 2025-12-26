@@ -32,9 +32,18 @@
 			{
 				"name": "Transcriber",
 				"class_name": "Transcriber"
+			},
+			{
+				"name": "InsertsStreamer",
+				"class_name": "InsertsStreamer"
 			}
 		]
 	},
+	"kv_namespaces": [
+		{
+			"binding": "KV"
+		}
+	],
 	"r2_buckets": [
 		{
 			"bucket_name": "audio-tutor-bucket",
@@ -46,7 +55,8 @@
 			"tag": "v1",
 			"new_sqlite_classes": [
 				"Chat",
-				"Transcriber"
+				"Transcriber",
+				"InsertsStreamer"
 			]
 		}
 	],

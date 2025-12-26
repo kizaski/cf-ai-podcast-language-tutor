@@ -122,8 +122,16 @@ export function cleanupMessages(messages: UIMessage[]): UIMessage[] {
 }
 
 export function base64ToUint8Array(base64Audio: string) {
-  // Strip the "data:audio/xxx;base64," prefix if present
-  const base64 = base64Audio.split(",")[1] || base64Audio;
+  if (!base64Audio) {
+    console.error("base64ToUint8Array received empty/undefined input");
+    return new Uint8Array(0);
+  }
+
+  // Strip prefix if present
+  const base64 = base64Audio.includes(",")
+    ? base64Audio.split(",")[1]
+    : base64Audio;
+
   const binaryString = atob(base64);
   const len = binaryString.length;
   const bytes = new Uint8Array(len);

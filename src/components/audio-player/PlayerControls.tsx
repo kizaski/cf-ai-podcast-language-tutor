@@ -1,4 +1,4 @@
-import type { PlaybackState, Episode } from "@/types/audio-types";
+import type { PlaybackState, Episode, Insert } from "@/types/audio-types";
 import { formatTime } from "@/lib/utils";
 
 interface PlayerControlsProps {
@@ -104,9 +104,9 @@ export const PlayerControls = ({
           {/* Insert markers */}
           {inserts
             .filter((insert) => insert.enabled) // && insert.hasLoaded !== false)
-            .map((insert) => (
+            .map((insert: Insert, idx) => (
               <div
-                key={insert.id}
+                key={`${insert.id}-${idx}-markers`}
                 className="absolute top-1/2 transform -translate-y-1/2 w-3 h-3 rounded-full cursor-pointer hover:scale-125 transition-transform z-10"
                 style={
                   {

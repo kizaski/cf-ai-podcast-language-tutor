@@ -28,6 +28,112 @@ import { parseBuffer } from "music-metadata";
 const workersai = createWorkersAI({ binding: env.AI });
 const model = workersai("@cf/meta/llama-3.2-3b-instruct");
 
+const PRIMER_GENERATION_PROMPT = `You are an educational audio assistant.
+
+Your task is to take a FULL transcript and transform it into MULTIPLE learning “Priming Sandwich” units.
+
+Each unit consists of:
+1. An INTRO (Priming)
+2. The MAIN AUDIO (unchanged, not rewritten)
+3. An OUTRO (Review)
+
+────────────────────────
+OBJECTIVE
+────────────────────────
+
+Instead of cutting every few seconds, you will:
+- Group the transcript into logical “chapters” or “paragraphs”
+- Each chapter should be ~30–60 seconds of spoken audio
+- Chapters should follow natural topic or idea boundaries
+
+────────────────────────
+INPUTS YOU WILL RECEIVE
+────────────────────────
+
+1. Target Audience:
+   - Language level (e.g., beginner / intermediate / advanced)
+   - Learning goal (e.g., vocabulary, listening comprehension)
+
+2. Full Transcript:
+   - Contains timestamps and subtitles for the entire audio
+   - Use timestamps ONLY to help segment the content
+   - Do NOT reference timestamps in the output
+
+────────────────────────
+YOUR TASK (STEP BY STEP)
+────────────────────────
+
+Step 1: Segment the Transcript
+- Divide the full transcript into 30–60 second chapters
+- Each chapter should cover one main idea or subtopic
+- Do NOT split mid-sentence or mid-idea
+
+Step 2: For EACH Chapter, Generate:
+- An INTRO (Priming)
+- An OUTRO (Review)
+
+────────────────────────
+INTRO (PRIMING) RULES
+────────────────────────
+
+For each chapter, generate an INTRO that:
+- Is 1–2 spoken sentences
+- Briefly explains what the listener is about to hear
+- Directs attention to:
+  - 1–3 key ideas OR
+  - 1–3 important words or concepts
+- Does NOT summarize or spoil the content
+- Uses simple, spoken language
+
+Example:
+“In this next part, you’ll hear about how the village prepares for the autumn festival. Listen for the words ‘harvest’ and ‘tradition.’”
+
+────────────────────────
+OUTRO (REVIEW) RULES – **LONGER VERSION**
+────────────────────────
+
+For each chapter, generate an OUTRO that:
+- Is 3–5 spoken sentences
+- Summarizes the key points clearly and in the listener’s own words
+- Reinforces learning by:
+  - Restating key vocabulary in context (1–3 words per chapter), AND/OR
+  - Asking 1–2 comprehension or reflective questions
+- Encourages the listener to think about the content
+- Does NOT introduce any new information
+- Uses friendly, spoken, and encouraging language
+
+Example:
+“So, the farmer explained that harvest work is hard, but machines make it faster today. We also learned that ‘tradition’ plays an important role in community life. Can you remember the word used for ‘machine’? Why do you think traditions are important for villages like this one?”
+
+────────────────────────
+OUTPUT FORMAT (STRICT)
+────────────────────────
+
+Return the result as a numbered list of chapters.
+
+For EACH chapter, output:
+
+Chapter X  
+Topic: <short inferred topic>
+
+INTRO:  
+<spoken intro text (1-2 sentences)>
+
+────────────────────────
+STYLE GUIDELINES
+────────────────────────
+
+- Friendly, natural, and spoken
+- No meta-commentary (do not mention subtitles, timestamps, or)
+- Assume the listener only hears audio
+- Keep intros concise, but outros detailed
+- Match difficulty to the target audience
+
+────────────────────────
+NOW PROCESS THE FOLLOWING FULL TRANSCRIPT:
+────────────────────────
+`;
+
 // const model = openai("gpt-4o-2024-11-20");
 // Cloudflare AI Gateway
 // const openai = createOpenAI({
@@ -121,32 +227,31 @@ export class Transcriber extends Agent<Env> {
     const audioKey = parts[3];
 
     if (!audioKey) {
-      console.error("Missing audioKey:" + audioKey);
       return new Response("Missing audioKey", { status: 400 });
     }
 
-    // Fetch chunks from R2
-    // const audioUrl = `/api/r2/${audioKey}`;
-    const audioUrl = audioKey;
-    const chunks = await this.getAudioChunks(audioUrl);
-
     const stream = new TransformStream();
     const writer = stream.writable.getWriter();
-
     const encoder = new TextEncoder();
 
     (async () => {
-      console.log("transcribing " + chunks.length + "chunks");
+      let accumulatedTranscript = "";
+      try {
+        for await (const text of this.transcribe(audioKey)) {
+          accumulatedTranscript += text + "\n";
 
-      for (const chunk of chunks) {
-        try {
-          const result = await this.transcribeChunk(chunk);
-          await writer.write(encoder.encode(result.text + "\n"));
-        } catch (err) {
-          await writer.write(encoder.encode("[Error transcribing chunk]\n"));
+          // 1. Stream the chunk to the client immediately
+          await writer.write(encoder.encode(text + "\n"));
+
+          // 2. Incrementally update KV so other agents (like InsertsStreamer)
+          // can see partial progress
+          await env.KV.put(`transcript:${audioKey}`, accumulatedTranscript);
         }
+      } catch (err) {
+        await writer.write(encoder.encode("[Error during transcription]\n"));
+      } finally {
+        await writer.close();
       }
-      await writer.close();
     })();
 
     return new Response(stream.readable, {
@@ -157,9 +262,22 @@ export class Transcriber extends Agent<Env> {
     });
   }
 
+  /**
+   * Core transcription primitive.
+   * Emits text chunks in order.
+   */
+  async *transcribe(audioKey: string): AsyncGenerator<string, void, unknown> {
+    const chunks = await this.getAudioChunks(audioKey);
+
+    for (const chunk of chunks) {
+      const result = await this.transcribeChunk(chunk);
+      yield result.text;
+    }
+  }
+
   async getAudioChunks(audioKey: string): Promise<ArrayBuffer[]> {
     const object = await env.R2_AUDIO_BUCKET.get(audioKey);
-    if (!object?.body) {
+    if (!object) {
       throw new Error(`Audio not found in R2: ${audioKey}`);
     }
 
@@ -195,19 +313,17 @@ export class Transcriber extends Agent<Env> {
   }
 
   /** Transcribe full audio and return text */
-  async transcribeAudio(audioUrl: string): Promise<string> {
-    const chunks = await this.getAudioChunks(audioUrl);
+  async transcribeAudio(audioKey: string): Promise<string> {
+    const cached = await env.KV.get(`transcript:${audioKey}`);
+    if (cached) return cached;
+
     let fullTranscript = "";
 
-    for (const chunk of chunks) {
-      try {
-        const result = await this.transcribeChunk(chunk);
-        fullTranscript += result.text + "\n";
-      } catch (error) {
-        console.error("Error transcribing chunk:", error);
-      }
+    for await (const text of this.transcribe(audioKey)) {
+      fullTranscript += text + "\n";
     }
 
+    await env.KV.put(`transcript:${audioKey}`, fullTranscript);
     return fullTranscript;
   }
 }
@@ -274,7 +390,12 @@ export async function handleAudioQuery(
   }
 }
 
-export async function handleAudioUpload(request: Request, env: Env) {
+export async function handleAudioUpload(
+  request: Request,
+  env: Env,
+  sessionId: string,
+  ctx: ExecutionContext
+) {
   try {
     const formData = await request.formData();
     const file = formData.get("audio") as File | null;
@@ -324,6 +445,8 @@ export async function handleAudioUpload(request: Request, env: Env) {
       description: ""
     };
 
+    ctx.waitUntil(processEpisodeInBackground(env, file.name, sessionId));
+
     return new Response(
       JSON.stringify({
         message: "Audio uploaded successfully",
@@ -340,6 +463,89 @@ export async function handleAudioUpload(request: Request, env: Env) {
       headers: { "Content-Type": "application/json" }
     });
   }
+}
+
+async function processEpisodeInBackground(
+  env: Env,
+  episodeId: string,
+  sessionId: string
+) {
+  // check in cache
+  const cached = await env.KV.get(`transcript:${episodeId}`);
+  if (cached) return cached;
+
+  // 1. Transcribe full audio
+  const transcriber = await getAgentByName<Env, Transcriber>(
+    env.Transcriber,
+    sessionId
+  );
+  const transcript = await transcriber.transcribeAudio(episodeId);
+
+  // 2. Persist transcript
+  await env.KV.put(`transcript:${episodeId}`, transcript);
+
+  // 3. Generate primer + summary text
+  const inserts = await generatePrimerAndSummary(env, episodeId, transcript);
+
+  // 4. Persist inserts (this is what frontend reads)
+  await env.KV.put(`inserts:${episodeId}`, JSON.stringify(inserts));
+
+  console.log("Background processing complete:", episodeId);
+}
+
+async function generatePrimerAndSummary(
+  env: Env,
+  episodeId: string,
+  transcript: string
+): Promise<Insert[]> {
+  // 1. Generate primer text
+  const primer = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
+    messages: [
+      {
+        role: "system",
+        content: PRIMER_GENERATION_PROMPT
+      },
+      {
+        role: "user",
+        content: transcript
+      }
+    ]
+  });
+
+  const primerText = primer.response;
+
+  if (!primerText) return [];
+
+  // 2. Convert primer to audio
+  // TODO -- use chatterbox
+  const { audio }: any = await env.AI.run("@cf/myshell-ai/melotts", {
+    prompt: primerText.trim(),
+    lang: "en"
+  });
+  // const expl_audio: any = await replicate.run(
+  //   "chatterbox/",
+  //   { input: { language: "EN", text: item.trim() } }
+  // );
+
+  // 3. Store in R2
+  const audioKey = `${episodeId}-intro.mp3`;
+
+  await env.R2_AUDIO_BUCKET.put(audioKey, base64ToUint8Array(audio));
+
+  // 4. Return an Insert
+  return [
+    {
+      id: crypto.randomUUID(),
+      type: "primer_intro",
+      audioUrl: audioKey,
+      startTime: 0, // TODO
+      title: "",
+      duration: 0,
+      endTime: 0,
+      enabled: false,
+      metadata: {}
+    }
+  ];
 }
 
 export async function handleR2Query(request: Request, env: Env, key: string) {
@@ -362,11 +568,89 @@ export async function handleR2Query(request: Request, env: Env, key: string) {
   }
 }
 
+export class InsertsStreamer extends Agent<Env> {
+  async onRequest(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const parts = url.pathname.split("/");
+    const episodeId = parts[3];
+
+    if (!episodeId) {
+      return new Response("Missing episodeId", { status: 400 });
+    }
+
+    const stream = new TransformStream();
+    const writer = stream.writable.getWriter();
+    const encoder = new TextEncoder();
+
+    (async () => {
+      try {
+        let transcript = "";
+        let attempts = 0;
+        const maxAttempts = 30; // 30 attempts * 2 seconds = 60 seconds timeout
+
+        // 1. Poll KV for the transcript (wait for Transcriber to start)
+        while (!transcript && attempts < maxAttempts) {
+          transcript = (await env.KV.get(`transcript:${episodeId}`)) || "";
+
+          if (!transcript) {
+            // Optional: send a heartbeat or "waiting" status to the client
+            await writer.write(encoder.encode(": keep-alive\n\n"));
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            attempts++;
+          }
+        }
+
+        if (!transcript) {
+          await writer.write(
+            encoder.encode("[Timeout: Transcript not found]\n")
+          );
+          return;
+        }
+
+        // 2. Generate inserts based on the (potentially partial) transcript
+        // Note: You could add logic here to wait until the transcript is
+        // a certain length before generating.
+        const inserts: Insert[] = await this.generateInserts(
+          episodeId,
+          transcript
+        );
+
+        for (const insert of inserts) {
+          await writer.write(encoder.encode(JSON.stringify(insert) + "\n"));
+        }
+
+        // 3. Save the generated inserts back to KV for persistence
+        await env.KV.put(`inserts:${episodeId}`, JSON.stringify(inserts));
+      } catch (err) {
+        console.error("Error generating inserts:", err);
+        await writer.write(encoder.encode("[Error generating inserts]\n"));
+      } finally {
+        await writer.close();
+      }
+    })();
+
+    return new Response(stream.readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive"
+      }
+    });
+  }
+
+  async generateInserts(
+    episodeId: string,
+    transcript: string
+  ): Promise<Insert[]> {
+    return await generatePrimerAndSummary(env, episodeId, transcript);
+  }
+}
+
 /**
  * Worker entry point that routes incoming requests to the appropriate handler
  */
 export default {
-  async fetch(request: Request, env: Env, _ctx: ExecutionContext) {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(request.url);
 
     // Handle non-agent routes FIRST
@@ -399,17 +683,17 @@ export default {
 
     if (url.pathname.startsWith("/api/episodes/")) {
       const parts = url.pathname.split("/"); // ["", "api", "episodes", ...]
-      const lastPart = parts[parts.length - 1];
+      const lastPart = decodeURIComponent(parts[parts.length - 1]);
 
       // POST /api/episodes/upload-audio
       if (request.method === "POST" && lastPart === "upload-audio") {
-        return handleAudioUpload(request, env);
+        return handleAudioUpload(request, env, sessionId, ctx);
       }
 
       // GET /api/episodes/:id
       if (request.method === "GET" && parts.length === 4) {
-        const episodeId = parts[3];
-        return handleAudioQuery(request, env, episodeId);
+        // const episodeId = parts[3];
+        return handleAudioQuery(request, env, lastPart);
       }
 
       if (
@@ -427,6 +711,18 @@ export default {
         });
 
         return transcriber.fetch(newRequest);
+      }
+
+      if (
+        request.method === "GET" &&
+        parts.length === 5 &&
+        lastPart === "inserts-stream"
+      ) {
+        const streamer = await getAgentByName<Env, InsertsStreamer>(
+          env.InsertsStreamer,
+          sessionId
+        );
+        return streamer.fetch(new Request(request.url, { method: "POST" }));
       }
     }
 

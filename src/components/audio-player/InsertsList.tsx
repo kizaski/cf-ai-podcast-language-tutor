@@ -22,9 +22,9 @@ export const InsertsList = ({
       </div>
 
       <div className="space-y-3">
-        {inserts.map((insert) => (
+        {inserts.map((insert, idx) => (
           <div
-            key={insert.id}
+            key={`${insert.id}-${idx}-list`}
             className={`p-4 rounded-lg border transition cursor-pointer ${
               insert.enabled
                 ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800"

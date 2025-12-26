@@ -6,7 +6,7 @@ export const API_BASE_URL = import.meta.env.NEXT_PUBLIC_API_BASE_URL || "";
 
 type UseEpisodeParams = {
   episodeId?: string;
-  initialData?: EpisodeData;
+  initialData?: EpisodeData | null;
 };
 
 export const useEpisode = ({

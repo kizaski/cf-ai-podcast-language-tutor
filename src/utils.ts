@@ -120,3 +120,19 @@ export function cleanupMessages(messages: UIMessage[]): UIMessage[] {
     return !hasIncompleteToolCall;
   });
 }
+
+export function base64ToUint8Array(base64Audio: string) {
+  // Strip the "data:audio/xxx;base64," prefix if present
+  const base64 = base64Audio.split(",")[1] || base64Audio;
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+export function base64ToArrayBuffer(base64Audio: string) {
+  return base64ToUint8Array(base64Audio).buffer;
+}

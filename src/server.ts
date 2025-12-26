@@ -1,4 +1,9 @@
-import { routeAgentRequest, type Schedule } from "agents";
+import {
+  Agent,
+  getAgentByName,
+  routeAgentRequest,
+  type Schedule
+} from "agents";
 
 import { AIChatAgent } from "agents/ai-chat-agent";
 import {
@@ -12,11 +17,13 @@ import {
   type ToolSet
 } from "ai";
 // import { openai } from "@ai-sdk/openai";
-import { processToolCalls, cleanupMessages } from "./utils";
+import { processToolCalls, cleanupMessages, base64ToUint8Array } from "./utils";
 import { tools, executions } from "./tools";
 import { createWorkersAI } from "workers-ai-provider";
 import { env } from "cloudflare:workers";
-import type { Episode, EpisodeData } from "./types/audio-types";
+import type { Episode, EpisodeData, Insert } from "./types/audio-types";
+import { parseBuffer } from "music-metadata";
+// import { streamObject } from "ai";
 
 const workersai = createWorkersAI({ binding: env.AI });
 const model = workersai("@cf/meta/llama-3.2-3b-instruct");
@@ -104,6 +111,104 @@ If the user asks to schedule a task, use the schedule tool to schedule the task.
         }
       }
     ]);
+  }
+}
+
+export class Transcriber extends Agent<Env> {
+  async onRequest(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const parts = url.pathname.split("/");
+    const audioKey = parts[3];
+
+    if (!audioKey) {
+      console.error("Missing audioKey:" + audioKey);
+      return new Response("Missing audioKey", { status: 400 });
+    }
+
+    // Fetch chunks from R2
+    // const audioUrl = `/api/r2/${audioKey}`;
+    const audioUrl = audioKey;
+    const chunks = await this.getAudioChunks(audioUrl);
+
+    const stream = new TransformStream();
+    const writer = stream.writable.getWriter();
+
+    const encoder = new TextEncoder();
+
+    (async () => {
+      console.log("transcribing " + chunks.length + "chunks");
+
+      for (const chunk of chunks) {
+        try {
+          const result = await this.transcribeChunk(chunk);
+          await writer.write(encoder.encode(result.text + "\n"));
+        } catch (err) {
+          await writer.write(encoder.encode("[Error transcribing chunk]\n"));
+        }
+      }
+      await writer.close();
+    })();
+
+    return new Response(stream.readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache"
+      }
+    });
+  }
+
+  async getAudioChunks(audioKey: string): Promise<ArrayBuffer[]> {
+    const object = await env.R2_AUDIO_BUCKET.get(audioKey);
+    if (!object?.body) {
+      throw new Error(`Audio not found in R2: ${audioKey}`);
+    }
+
+    const arrayBuffer = await object.arrayBuffer();
+    const chunkSize = 1024 * 1024; // 1MB
+    const chunks: ArrayBuffer[] = [];
+    for (let i = 0; i < arrayBuffer.byteLength; i += chunkSize) {
+      chunks.push(arrayBuffer.slice(i, i + chunkSize));
+    }
+    return chunks;
+  }
+
+  async transcribeChunk(
+    chunkBuffer: ArrayBuffer
+  ): Promise<Ai_Cf_Openai_Whisper_Output> {
+    const byteArray = Array.from(new Uint8Array(chunkBuffer));
+
+    if (byteArray.length === 0) {
+      console.warn("Skipping empty audio chunk");
+      return { text: "[Empty chunk]" };
+    }
+
+    const res = await env.AI.run("@cf/openai/whisper", {
+      audio: byteArray,
+      task: "transcribe"
+    });
+
+    if (typeof res === "object" && "text" in res) {
+      return res;
+    }
+
+    throw new Error("Transcription failed or invalid response format");
+  }
+
+  /** Transcribe full audio and return text */
+  async transcribeAudio(audioUrl: string): Promise<string> {
+    const chunks = await this.getAudioChunks(audioUrl);
+    let fullTranscript = "";
+
+    for (const chunk of chunks) {
+      try {
+        const result = await this.transcribeChunk(chunk);
+        fullTranscript += result.text + "\n";
+      } catch (error) {
+        console.error("Error transcribing chunk:", error);
+      }
+    }
+
+    return fullTranscript;
   }
 }
 
@@ -209,8 +314,6 @@ export async function handleAudioUpload(request: Request, env: Env) {
       }
     });
 
-    console.log("Uploading file...");
-
     // Create episode object
     const episode: Episode = {
       id: file.name,
@@ -280,17 +383,19 @@ export default {
       isNewSession = true;
     }
 
-    if (url.pathname.startsWith("/episodes/") && request.method === "GET") {
-      const parts = url.pathname.split("/");
-      if (parts.length === 3) {
-        const episodeId = parts[2];
-        // Redirect to the API endpoint
-        return Response.redirect(
-          `${url.origin}/api/episodes/${episodeId}`,
-          307
-        );
-      }
-    }
+    // Rewrite URL for agent routing dynamically
+    const agentUrl = new URL(request.url);
+    const originalPath = agentUrl.pathname.replace(/^\/+/, ""); // remove leading slash
+
+    // Extract segments from path
+    const segments = originalPath.split("/");
+
+    // Assume the first segment is the agent type and the last segment is the action
+    const agentType = segments[1] ?? "default"; // fallback if missing
+    const lastSegment = segments.pop() ?? ""; // last segment of the path
+
+    // Build new path dynamically
+    agentUrl.pathname = `/agents/${agentType}/${sessionId}/${lastSegment}`;
 
     if (url.pathname.startsWith("/api/episodes/")) {
       const parts = url.pathname.split("/"); // ["", "api", "episodes", ...]
@@ -306,6 +411,23 @@ export default {
         const episodeId = parts[3];
         return handleAudioQuery(request, env, episodeId);
       }
+
+      if (
+        request.method === "GET" &&
+        parts.length === 5 &&
+        lastPart === "transcribe-stream"
+      ) {
+        const transcriber = await getAgentByName<Env, Transcriber>(
+          env.Transcriber,
+          sessionId
+        );
+        const newRequest = new Request(request.url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        });
+
+        return transcriber.fetch(newRequest);
+      }
     }
 
     if (url.pathname.startsWith("/api/r2/")) {
@@ -317,13 +439,6 @@ export default {
         return handleR2Query(request, env, key);
       }
     }
-
-    // Rewrite URL for agent routing
-    const agentUrl = new URL(request.url);
-    const originalPath = url.pathname.replace(/^\/+/, ""); // remove leading slash
-    // If original path was /agents/chat/default/get-messages, extract the last segment
-    const lastSegment = originalPath.split("/").pop();
-    agentUrl.pathname = `/agents/chat/${sessionId}/${lastSegment ?? ""}`;
 
     const agentRequest = new Request(agentUrl.toString(), request);
 

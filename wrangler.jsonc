@@ -28,6 +28,10 @@
 			{
 				"name": "Chat",
 				"class_name": "Chat"
+			},
+			{
+				"name": "Transcriber",
+				"class_name": "Transcriber"
 			}
 		]
 	},
@@ -41,7 +45,8 @@
 		{
 			"tag": "v1",
 			"new_sqlite_classes": [
-				"Chat"
+				"Chat",
+				"Transcriber"
 			]
 		}
 	],

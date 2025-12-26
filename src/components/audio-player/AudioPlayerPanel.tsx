@@ -86,9 +86,8 @@ export const AudioPlayerPanel = ({
             if (!chunk.trim()) continue;
 
             try {
-              console.log(chunk);
-
-              const newInsert: Insert = JSON.parse(chunk);
+              let newInsert: Insert = JSON.parse(chunk);
+              if (newInsert.endTime === 0) newInsert.endTime = 10;
               setEpisodeData((prev) => {
                 if (!prev) return prev;
                 return { ...prev, inserts: [...prev.inserts, newInsert] };

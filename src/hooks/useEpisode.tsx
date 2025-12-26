@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { EpisodeData } from "@/types/audio-types";
 import { useNavigate } from "react-router";
 
-export const API_BASE_URL = import.meta.env.NEXT_PUBLIC_API_BASE_URL || "";
+const API_BASE_URL = import.meta.env.NEXT_PUBLIC_API_BASE_URL || "";
 
 type UseEpisodeParams = {
   episodeId?: string;

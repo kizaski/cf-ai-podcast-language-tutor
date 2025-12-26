@@ -1,10 +1,11 @@
 import { useState, useCallback, useEffect } from "react";
 import type { EpisodeData, PlaybackState } from "@/types/audio-types";
+import type { useAudioEngine } from "./useAudioEngine";
 
 export const useEnhancedAudioPlayer = (
   initialData: EpisodeData,
   setEpisodeData: (ep: EpisodeData) => void,
-  audioEngine: any
+  audioEngine: ReturnType<typeof useAudioEngine>
 ) => {
   const [playbackState, setPlaybackState] = useState<PlaybackState>({
     currentTime: 0,
@@ -25,6 +26,8 @@ export const useEnhancedAudioPlayer = (
   }, [audioEngine.isPlaying, audioEngine.currentTime]);
 
   const handlePlayPause = useCallback(() => {
+    console.log(audioEngine.hasLoaded);
+
     if (!audioEngine.hasLoaded) return;
 
     if (playbackState.isPlaying) {
@@ -58,8 +61,6 @@ export const useEnhancedAudioPlayer = (
           : [...prev.activeInserts, insertId];
         return { ...prev, activeInserts: newActiveInserts };
       });
-
-      audioEngine.toggleInsert(insertId);
     },
     [audioEngine, initialData, setEpisodeData]
   );
@@ -98,8 +99,6 @@ export const useEnhancedAudioPlayer = (
 
     const newActiveInserts = newEnabled ? updatedInserts.map((i) => i.id) : [];
     setPlaybackState((prev) => ({ ...prev, activeInserts: newActiveInserts }));
-
-    updatedInserts.forEach((insert) => audioEngine.toggleInsert(insert.id));
   }, [audioEngine, initialData, setEpisodeData]);
 
   const handleStop = useCallback(() => {
@@ -132,7 +131,7 @@ export const useEnhancedAudioPlayer = (
     handleStop,
 
     // Audio engine access
-    audioEngine,
-    activeInserts: audioEngine.activeInserts
+    audioEngine
+    // activeInserts: audioEngine.activeInserts
   };
 };

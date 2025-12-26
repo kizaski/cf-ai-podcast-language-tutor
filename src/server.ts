@@ -32,107 +32,8 @@ const PRIMER_GENERATION_PROMPT = `You are an educational audio assistant.
 
 Your task is to take a FULL transcript and transform it into MULTIPLE learning “Priming Sandwich” units.
 
-Each unit consists of:
-1. An INTRO (Priming)
-2. The MAIN AUDIO (unchanged, not rewritten)
-3. An OUTRO (Review)
-
-────────────────────────
-OBJECTIVE
-────────────────────────
-
-Instead of cutting every few seconds, you will:
-- Group the transcript into logical “chapters” or “paragraphs”
-- Each chapter should be ~30–60 seconds of spoken audio
-- Chapters should follow natural topic or idea boundaries
-
-────────────────────────
-INPUTS YOU WILL RECEIVE
-────────────────────────
-
-1. Target Audience:
-   - Language level (e.g., beginner / intermediate / advanced)
-   - Learning goal (e.g., vocabulary, listening comprehension)
-
-2. Full Transcript:
-   - Contains timestamps and subtitles for the entire audio
-   - Use timestamps ONLY to help segment the content
-   - Do NOT reference timestamps in the output
-
-────────────────────────
-YOUR TASK (STEP BY STEP)
-────────────────────────
-
-Step 1: Segment the Transcript
-- Divide the full transcript into 30–60 second chapters
-- Each chapter should cover one main idea or subtopic
-- Do NOT split mid-sentence or mid-idea
-
-Step 2: For EACH Chapter, Generate:
-- An INTRO (Priming)
-- An OUTRO (Review)
-
-────────────────────────
-INTRO (PRIMING) RULES
-────────────────────────
-
-For each chapter, generate an INTRO that:
-- Is 1–2 spoken sentences
-- Briefly explains what the listener is about to hear
-- Directs attention to:
-  - 1–3 key ideas OR
-  - 1–3 important words or concepts
-- Does NOT summarize or spoil the content
-- Uses simple, spoken language
-
-Example:
-“In this next part, you’ll hear about how the village prepares for the autumn festival. Listen for the words ‘harvest’ and ‘tradition.’”
-
-────────────────────────
-OUTRO (REVIEW) RULES – **LONGER VERSION**
-────────────────────────
-
-For each chapter, generate an OUTRO that:
-- Is 3–5 spoken sentences
-- Summarizes the key points clearly and in the listener’s own words
-- Reinforces learning by:
-  - Restating key vocabulary in context (1–3 words per chapter), AND/OR
-  - Asking 1–2 comprehension or reflective questions
-- Encourages the listener to think about the content
-- Does NOT introduce any new information
-- Uses friendly, spoken, and encouraging language
-
-Example:
-“So, the farmer explained that harvest work is hard, but machines make it faster today. We also learned that ‘tradition’ plays an important role in community life. Can you remember the word used for ‘machine’? Why do you think traditions are important for villages like this one?”
-
-────────────────────────
-OUTPUT FORMAT (STRICT)
-────────────────────────
-
-Return the result as a numbered list of chapters.
-
-For EACH chapter, output:
-
-Chapter X  
-Topic: <short inferred topic>
-
-INTRO:  
-<spoken intro text (1-2 sentences)>
-
-────────────────────────
-STYLE GUIDELINES
-────────────────────────
-
-- Friendly, natural, and spoken
-- No meta-commentary (do not mention subtitles, timestamps, or)
-- Assume the listener only hears audio
-- Keep intros concise, but outros detailed
-- Match difficulty to the target audience
-
-────────────────────────
-NOW PROCESS THE FOLLOWING FULL TRANSCRIPT:
-────────────────────────
-`;
+...
+`; // TODO
 
 // const model = openai("gpt-4o-2024-11-20");
 // Cloudflare AI Gateway
@@ -713,16 +614,95 @@ export default {
         return transcriber.fetch(newRequest);
       }
 
+      // GET /api/episodes/:id/inserts-stream
       if (
         request.method === "GET" &&
         parts.length === 5 &&
-        lastPart === "inserts-stream"
+        parts[4] === "inserts-stream"
       ) {
-        const streamer = await getAgentByName<Env, InsertsStreamer>(
-          env.InsertsStreamer,
-          sessionId
+        const episodeId = parts[3];
+
+        // Create a streaming response
+        const stream = new TransformStream();
+        const writer = stream.writable.getWriter();
+        const encoder = new TextEncoder();
+
+        ctx.waitUntil(
+          new Promise(async () => {
+            try {
+              // Check if we already have inserts
+              const cachedInserts = await env.KV.get(`inserts:${episodeId}`);
+
+              if (cachedInserts) {
+                // Stream cached inserts
+                const inserts = JSON.parse(cachedInserts);
+                for (const insert of inserts) {
+                  writer.write(encoder.encode(JSON.stringify(insert) + "\n"));
+                }
+              } else {
+                // Wait for transcript first
+                let transcript = "";
+                let attempts = 0;
+                const maxAttempts = 60; // Wait up to 2 minutes
+
+                while (!transcript && attempts < maxAttempts) {
+                  transcript =
+                    (await env.KV.get(`transcript:${episodeId}`)) || "";
+                  if (!transcript) {
+                    // Send keep-alive
+                    writer.write(
+                      encoder.encode(": waiting-for-transcript\n\n")
+                    );
+                    await new Promise((resolve) => setTimeout(resolve, 2000));
+                    attempts++;
+                  }
+                }
+
+                if (!transcript) {
+                  writer.write(
+                    encoder.encode("[Error: Transcript not available]\n")
+                  );
+                  writer.close();
+                  return;
+                }
+
+                // Generate inserts
+                const streamer = await getAgentByName<Env, InsertsStreamer>(
+                  env.InsertsStreamer,
+                  sessionId!
+                );
+                const inserts = await streamer.generateInserts(
+                  episodeId,
+                  transcript
+                );
+
+                // Stream inserts
+                for (const insert of inserts) {
+                  writer.write(encoder.encode(JSON.stringify(insert) + "\n"));
+                }
+
+                // Cache inserts
+                await env.KV.put(
+                  `inserts:${episodeId}`,
+                  JSON.stringify(inserts)
+                );
+              }
+            } catch (error: any) {
+              console.error("Inserts stream error:", error);
+              writer.write(encoder.encode(`[Error: ${error.message}]\n`));
+            } finally {
+              writer.close();
+            }
+          })
         );
-        return streamer.fetch(new Request(request.url, { method: "POST" }));
+
+        return new Response(stream.readable, {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            Connection: "keep-alive"
+          }
+        });
       }
     }
 

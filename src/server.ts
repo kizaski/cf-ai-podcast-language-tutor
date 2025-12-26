@@ -16,6 +16,7 @@ import { processToolCalls, cleanupMessages } from "./utils";
 import { tools, executions } from "./tools";
 import { createWorkersAI } from "workers-ai-provider";
 import { env } from "cloudflare:workers";
+import type { Episode, EpisodeData } from "./types/audio-types";
 
 const workersai = createWorkersAI({ binding: env.AI });
 const model = workersai("@cf/meta/llama-3.2-3b-instruct");
@@ -122,56 +123,139 @@ export function getSessionId(request: Request): string | null {
   return value ? decodeURIComponent(value) : null;
 }
 
+export async function handleAudioQuery(
+  request: Request,
+  env: Env,
+  episodeId: string
+) {
+  try {
+    // Check if the audio file exists in R2
+    const object = await env.R2_AUDIO_BUCKET.head(episodeId);
+
+    if (!object) {
+      return new Response(JSON.stringify({ error: "Episode not found." }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    // Build episode metadata
+    const episode: Episode = {
+      id: episodeId,
+      title: episodeId,
+      duration: 0, // can be calculated
+      audioUrl: episodeId,
+      publishedDate: new Date().toISOString(),
+      description: ""
+    };
+
+    // Full EpisodeData structure
+    const episodeData: EpisodeData = {
+      episode,
+      inserts: [], // No inserts by default
+      transcript: [] // No transcript by default
+    };
+
+    return new Response(JSON.stringify(episodeData), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  } catch (err) {
+    console.error("Query error:", err);
+    return new Response(JSON.stringify({ error: "Failed to fetch episode." }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+}
+
 export async function handleAudioUpload(request: Request, env: Env) {
   try {
     const formData = await request.formData();
     const file = formData.get("audio") as File | null;
 
     if (!file) {
-      return Response.json(
-        { error: "No audio file provided." },
-        { status: 400 }
+      return new Response(
+        JSON.stringify({ error: "No audio file provided." }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // Optional: check file type
+    // Check file type
     if (!file.type.startsWith("audio/")) {
-      return Response.json(
-        { error: "Invalid audio file type." },
-        { status: 400 }
+      return new Response(
+        JSON.stringify({ error: "Invalid audio file type." }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // Optional: check size (example 100MB max)
-    const MAX_SIZE = 100 * 1024 * 1024;
+    // Check size
+    const MAX_SIZE = 150 * 1024 * 1024; // 150MB
     if (file.size > MAX_SIZE) {
-      return Response.json({ error: "Audio file too large." }, { status: 400 });
+      return new Response(JSON.stringify({ error: "Audio file too large." }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
     }
 
-    // Store in R2
+    // Store file in R2
     const arrayBuffer = await file.arrayBuffer();
-    const fileName = `audio-${Date.now()}-${file.name}`;
+    // const timestamp = Date.now();
+    // const fileNameExtended = `audio-${timestamp}-${file.name}`;
 
-    // TODO -- r2 for audio
-    // await env.R2_BUCKET.put(fileName, arrayBuffer, {
-    //   httpMetadata: {
-    //     contentType: file.type
-    //   }
-    // });
-
-    // return Response.json({
-    //   message: "Audio uploaded successfully",
-    //   fileName,
-    //   size: file.size
-    // });
-    return Response.json({
-      message: "TODO",
-      fileName,
-      size: file.size
+    await env.R2_AUDIO_BUCKET.put(file.name, arrayBuffer, {
+      httpMetadata: {
+        contentType: file.type
+      }
     });
+
+    console.log("Uploading file...");
+
+    // Create episode object
+    const episode: Episode = {
+      id: file.name,
+      title: file.name,
+      duration: 0, // can be calculated later
+      audioUrl: "/api/r2/" + file.name,
+      publishedDate: new Date().toISOString(),
+      description: ""
+    };
+
+    return new Response(
+      JSON.stringify({
+        message: "Audio uploaded successfully",
+        fileName: file.name,
+        size: file.size,
+        episode
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
   } catch (err) {
     console.error("Upload error:", err);
-    return Response.json({ error: "Upload failed" }, { status: 500 });
+    return new Response(JSON.stringify({ error: "Upload failed" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+}
+
+export async function handleR2Query(request: Request, env: Env, key: string) {
+  try {
+    const object = await env.R2_AUDIO_BUCKET.get(key);
+    if (!object) {
+      return new Response("Not found", { status: 404 });
+    }
+
+    return new Response(object.body, {
+      headers: {
+        "Content-Type":
+          object.httpMetadata?.contentType || "application/octet-stream",
+        "Content-Length": object.size.toString()
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    return new Response("Failed to fetch R2 object", { status: 500 });
   }
 }
 
@@ -196,9 +280,42 @@ export default {
       isNewSession = true;
     }
 
-    // Handle audio uploads
-    if (url.pathname.startsWith("/api/episodes/upload-audio")) {
-      return handleAudioUpload(request, env);
+    if (url.pathname.startsWith("/episodes/") && request.method === "GET") {
+      const parts = url.pathname.split("/");
+      if (parts.length === 3) {
+        const episodeId = parts[2];
+        // Redirect to the API endpoint
+        return Response.redirect(
+          `${url.origin}/api/episodes/${episodeId}`,
+          307
+        );
+      }
+    }
+
+    if (url.pathname.startsWith("/api/episodes/")) {
+      const parts = url.pathname.split("/"); // ["", "api", "episodes", ...]
+      const lastPart = parts[parts.length - 1];
+
+      // POST /api/episodes/upload-audio
+      if (request.method === "POST" && lastPart === "upload-audio") {
+        return handleAudioUpload(request, env);
+      }
+
+      // GET /api/episodes/:id
+      if (request.method === "GET" && parts.length === 4) {
+        const episodeId = parts[3];
+        return handleAudioQuery(request, env, episodeId);
+      }
+    }
+
+    if (url.pathname.startsWith("/api/r2/")) {
+      const parts = url.pathname.split("/");
+
+      // GET /api/r2/:key
+      if (request.method === "GET" && parts.length === 4) {
+        const key = parts[3];
+        return handleR2Query(request, env, key);
+      }
     }
 
     // Rewrite URL for agent routing

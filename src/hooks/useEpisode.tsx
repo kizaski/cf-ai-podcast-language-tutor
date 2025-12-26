@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import type { EpisodeData } from "@/types/audio-types";
+import { useNavigate } from "react-router";
 
-const API_BASE_URL = import.meta.env.NEXT_PUBLIC_API_BASE_URL || "";
+export const API_BASE_URL = import.meta.env.NEXT_PUBLIC_API_BASE_URL || "";
 
 type UseEpisodeParams = {
   episodeId?: string;
@@ -18,15 +19,20 @@ export const useEpisode = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const navigate = useNavigate();
 
   const fetchEpisode = useCallback(async (id: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/episodes/${id}`);
-      if (!res.ok)
-        throw new Error(`Failed to fetch episode: ${res.statusText}`);
-      const data: EpisodeData = await res.json();
+      const resEp = await fetch(
+        `${API_BASE_URL}/api/episodes/${encodeURIComponent(id)}`
+      );
+      if (!resEp.ok) {
+        throw new Error(`Failed to fetch episode: ${resEp.statusText}`);
+      }
+
+      const data: EpisodeData = await resEp.json();
       setEpisode(data);
       return data;
     } catch (err) {
@@ -73,7 +79,8 @@ export const useEpisode = ({
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
               const res = JSON.parse(xhr.responseText);
-              const newEpisodeId = res.episodeId;
+              const newEpisodeId = res.episode.id;
+              if (newEpisodeId) navigate(`/episodes/${newEpisodeId}`);
               resolve(newEpisodeId);
             } catch (err) {
               reject(err);

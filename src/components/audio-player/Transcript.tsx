@@ -6,15 +6,13 @@ interface TranscriptProps {
   inserts: Insert[];
   currentTime: number;
   onSeek: (time: number) => void;
-  onAddInsertAtTime: (time: number) => void;
 }
 
 export const Transcript = ({
   segments,
   inserts,
   currentTime,
-  onSeek,
-  onAddInsertAtTime
+  onSeek
 }: TranscriptProps) => {
   return (
     <div>
@@ -54,14 +52,8 @@ export const Transcript = ({
                     </span>
                   )}
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAddInsertAtTime(segment.startTime);
-                  }}
-                  className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition"
-                >
-                  + Insert Here
+                <button className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition">
+                  ̶+̶ ̶I̶n̶s̶e̶r̶t̶ ̶H̶e̶r̶e̶
                 </button>
               </div>
               <p className="text-neutral-700 dark:text-neutral-300">

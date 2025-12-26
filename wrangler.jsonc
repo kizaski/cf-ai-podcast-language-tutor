@@ -31,6 +31,12 @@
 			}
 		]
 	},
+	"r2_buckets": [
+		{
+			"bucket_name": "audio-tutor-bucket",
+			"binding": "R2_AUDIO_BUCKET"
+		}
+	],
 	"migrations": [
 		{
 			"tag": "v1",

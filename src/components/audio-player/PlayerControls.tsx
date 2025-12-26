@@ -55,7 +55,7 @@ export const PlayerControls = ({
               <div className="w-full bg-neutral-300 dark:bg-neutral-700 rounded-full h-2">
                 <div
                   className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: "50%" }} // This would come from loadProgress
+                  style={{ width: "50%" }} // TODO -- rm or impl
                 />
               </div>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">

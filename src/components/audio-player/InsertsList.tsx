@@ -5,24 +5,19 @@ interface InsertsListProps {
   inserts: Insert[];
   onToggleInsert: (id: string) => void;
   onSeek: (time: number) => void;
-  onAddInsert: () => void;
 }
 
 export const InsertsList = ({
   inserts,
   onToggleInsert,
-  onSeek,
-  onAddInsert
+  onSeek
 }: InsertsListProps) => {
   return (
     <div className="mb-8">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold">Inserts ({inserts.length})</h3>
-        <button
-          onClick={onAddInsert}
-          className="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition"
-        >
-          + Add Insert
+        <button className="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition">
+          ̶+̶ ̶A̶d̶d̶ ̶I̶n̶s̶e̶r̶t̶
         </button>
       </div>
 

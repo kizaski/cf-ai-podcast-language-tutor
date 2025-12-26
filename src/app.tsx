@@ -13,7 +13,7 @@ import { useAudioFile } from "./hooks/useAudioFile";
 
 export default function Chat() {
   const { episodeId } = useParams<{ episodeId: string }>();
-  const { episode, fetchEpisode } = useEpisode({});
+  const { episode, fetchEpisode, setEpisode } = useEpisode({});
 
   const audioFileState = useAudioFile();
   const audioFile = { props: audioFileState };
@@ -89,7 +89,12 @@ export default function Chat() {
         </div>
 
         {/* Audio Player Panel if on episode URL / have episode  */}
-        {episodeId && <AudioPlayerPanel initialData={episode ?? undefined} />}
+        {episodeId && (
+          <AudioPlayerPanel
+            episodeData={episode ?? undefined}
+            setEpisodeData={setEpisode}
+          />
+        )}
       </div>
     </div>
   );

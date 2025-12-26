@@ -1,5 +1,5 @@
 interface AudioLoadingStateProps {
-  progress: number;
+  progress?: number;
   isLoading: boolean;
   hasLoaded: boolean;
 }
@@ -28,7 +28,7 @@ export const AudioLoadingState = ({
                 />
               </div>
               <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                Loading audio files... {Math.round(progress)}%
+                Loading audio files... {Math.round(progress || 0)}%
               </p>
               <p className="text-xs text-neutral-500 dark:text-neutral-500 mt-2">
                 Placeholder

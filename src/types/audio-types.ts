@@ -30,14 +30,6 @@ export interface Episode {
   audioBuffer?: AudioBuffer;
 }
 
-export interface PlaybackState {
-  currentTime: number;
-  isPlaying: boolean;
-  volume: number;
-  playbackRate: number;
-  activeInserts: string[];
-}
-
 export interface EpisodeData {
   episode: Episode;
   inserts: Insert[];
@@ -52,10 +44,4 @@ export interface PlaybackState {
   activeInserts: string[];
   playbackStartTime?: number;
   lastPauseTime?: number;
-}
-
-export interface EpisodeData {
-  episode: Episode;
-  inserts: Insert[];
-  transcript: TranscriptSegment[];
 }

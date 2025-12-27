@@ -9,6 +9,46 @@ import type {
 import { convertToModelMessages, isToolUIPart } from "ai";
 import { APPROVAL } from "./shared";
 
+export type TranscriptKV =
+  | { status: "complete"; text: string }
+  | { status: "in_progress"; text: string }
+  | { status: "error"; message: string };
+
+export const transcriptKey = (id: string) => `transcript:${id}`;
+
+export async function getTranscriptKV(
+  env: Env,
+  id: string
+): Promise<TranscriptKV | null> {
+  const raw = await env.KV.get(transcriptKey(id));
+  if (!raw) return null;
+
+  // Backwards compatibility: plain text transcript
+  if (!raw.trim().startsWith("{")) {
+    return {
+      status: "complete",
+      text: raw
+    };
+  }
+
+  try {
+    return JSON.parse(raw) as TranscriptKV;
+  } catch {
+    return {
+      status: "complete",
+      text: raw
+    };
+  }
+}
+
+export async function putTranscriptKV(
+  env: Env,
+  id: string,
+  value: TranscriptKV
+) {
+  await env.KV.put(transcriptKey(id), JSON.stringify(value));
+}
+
 function isValidToolName<K extends PropertyKey, T extends object>(
   key: K,
   obj: T

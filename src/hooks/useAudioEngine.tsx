@@ -155,7 +155,7 @@ export const useAudioEngine = ({
   /* ---------- LOAD AUDIO BUFFER UTILITY ---------- */
   const loadAudioBuffer = useCallback(
     async (audioUrl: string): Promise<AudioBuffer | null> => {
-      if (!audioContextRef.current) return null;
+      if (!audioContextRef.current || !audioUrl) return null;
 
       try {
         const response = await fetch(`/api/r2/${audioUrl}`);

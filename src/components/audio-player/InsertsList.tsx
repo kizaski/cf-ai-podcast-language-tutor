@@ -48,7 +48,7 @@ export const InsertsList = ({
                     </span>
                   </div>
                   <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                    {insert.type.replace("_", " ")} • Starts at{" "}
+                    {insert?.type.replace("_", " ") || " "} • Starts at{" "}
                     {formatTime(insert.startTime)}
                   </p>
                 </div>

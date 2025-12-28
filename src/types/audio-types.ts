@@ -45,3 +45,18 @@ export interface PlaybackState {
   playbackStartTime?: number;
   lastPauseTime?: number;
 }
+
+export interface Word {
+  word: string;
+  start: number;
+  end: number;
+}
+
+export interface Phrase {
+  id: string;
+  text: string;
+  start: number;
+  end: number;
+  wordCount: number;
+  words: Word[];
+}

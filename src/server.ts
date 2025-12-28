@@ -22,13 +22,21 @@ import {
   base64ToUint8Array,
   getTranscriptKV,
   putTranscriptKV,
-  type TranscriptKV
+  type TranscriptKV,
+  getAudioDuration,
+  sendEvent,
+  extractPhrases
 } from "./utils";
 import { tools, executions } from "./tools";
 import { createWorkersAI } from "workers-ai-provider";
 import { env } from "cloudflare:workers";
-import type { Episode, EpisodeData, Insert } from "./types/audio-types";
-import { parseBuffer } from "music-metadata";
+import type {
+  Episode,
+  EpisodeData,
+  Insert,
+  TranscriptSegment,
+  Word
+} from "./types/audio-types";
 
 const workersai = createWorkersAI({ binding: env.AI });
 const model = workersai("@cf/meta/llama-3.2-3b-instruct");
@@ -129,54 +137,76 @@ export class Transcriber extends Agent<Env> {
 
     const cached = await getTranscriptKV(env, audioKey);
 
-    if (cached?.status === "complete") {
-      return new Response(cached.text, {
-        headers: { "Content-Type": "text/plain" }
-      });
-    }
-
     const stream = new TransformStream();
     const writer = stream.writable.getWriter();
     const encoder = new TextEncoder();
 
     (async () => {
-      let accumulatedTranscript =
-        cached?.status === "in_progress" ? cached.text : "";
+      if (cached?.status === "complete") {
+        console.log("have cached transcript.");
+
+        for (const segment of cached.segments) {
+          await sendEvent(segment, writer, encoder);
+        }
+      }
+
+      let accumulated: TranscriptSegment[] =
+        cached?.status === "in_progress" ? cached.segments : [];
 
       try {
         await putTranscriptKV(env, audioKey, {
           status: "in_progress",
-          text: accumulatedTranscript
+          segments: accumulated
         });
 
-        for await (const text of this.transcribe(audioKey)) {
-          accumulatedTranscript += text + "\n";
+        // TODO -- fix transcription starting over instead of continuing
+        for await (const whisper_output of this.transcribe(audioKey)) {
+          const words = whisper_output.words ?? [];
 
-          // Stream the chunk to the client immediately
-          await writer.write(encoder.encode(text + "\n"));
+          if (!words.length) continue;
 
-          // incremental KV update
+          const phrases = extractPhrases(words as Word[]);
+
+          for (const phrase of phrases) {
+            const segment: TranscriptSegment = {
+              text: phrase.text,
+              startTime: phrase.start,
+              endTime: phrase.end,
+              id: phrase.id,
+              speaker: ""
+            };
+
+            await sendEvent(segment, writer, encoder);
+            accumulated.push(segment);
+          }
+
           await putTranscriptKV(env, audioKey, {
             status: "in_progress",
-            text: accumulatedTranscript
+            segments: accumulated
           });
         }
 
         // mark complete
         await putTranscriptKV(env, audioKey, {
           status: "complete",
-          text: accumulatedTranscript
+          segments: accumulated
         });
       } catch (err: any) {
         await putTranscriptKV(env, audioKey, {
           status: "error",
           message: err.message ?? "transcription failed"
         });
-        await writer.write(encoder.encode("[Error during transcription]\n"));
+        await sendEvent(
+          { error: "[Error during transcription]" },
+          writer,
+          encoder
+        );
       } finally {
         await writer.close();
       }
-    })();
+    })().catch((error) => {
+      console.error("Unhandled error in Transcriber:", error);
+    });
 
     return new Response(stream.readable, {
       headers: {
@@ -190,12 +220,41 @@ export class Transcriber extends Agent<Env> {
    * Core transcription primitive.
    * Emits text chunks in order.
    */
-  async *transcribe(audioKey: string): AsyncGenerator<string, void, unknown> {
+  async *transcribe(
+    audioKey: string
+  ): AsyncGenerator<Ai_Cf_Openai_Whisper_Output, void, unknown> {
     const chunks = await this.getAudioChunks(audioKey);
 
+    let timeOffset = 0;
+
     for (const chunk of chunks) {
+      // Get exact duration of this chunk
+      const durationSec = await getAudioDuration(chunk);
+
+      // Transcribe this chunk
       const result = await this.transcribeChunk(chunk);
-      yield result.text;
+
+      // Normalize word timestamps using timeOffset
+      if (result.words?.length) {
+        result.words = result.words
+          .filter(
+            (w): w is Word =>
+              typeof w.start === "number" &&
+              typeof w.end === "number" &&
+              typeof w.word === "string"
+          )
+          .map((w) => ({
+            ...w,
+            start: w.start + timeOffset,
+            end: w.end + timeOffset
+          }));
+      }
+
+      // Yield normalized chunk
+      yield result;
+
+      // Increment timeOffset by this chunk’s duration
+      timeOffset += durationSec;
     }
   }
 
@@ -234,45 +293,6 @@ export class Transcriber extends Agent<Env> {
     }
 
     throw new Error("Transcription failed or invalid response format");
-  }
-
-  /** Transcribe full audio and return text */
-  async transcribeAudio(audioKey: string): Promise<string> {
-    const cached = await getTranscriptKV(env, audioKey);
-    if (cached?.status === "complete") {
-      return cached.text;
-    }
-
-    if (cached?.status === "in_progress") {
-      // wait until another worker finishes
-      for (let i = 0; i < 60; i++) {
-        await new Promise((r) => setTimeout(r, 2000));
-        const retry = await getTranscriptKV(env, audioKey);
-        if (retry?.status === "complete") return retry.text;
-      }
-      throw new Error("Transcript stuck in progress");
-    }
-
-    let full = "";
-    await putTranscriptKV(env, audioKey, {
-      status: "in_progress",
-      text: ""
-    });
-
-    for await (const text of this.transcribe(audioKey)) {
-      full += text + "\n";
-      await putTranscriptKV(env, audioKey, {
-        status: "in_progress",
-        text: full
-      });
-    }
-
-    await putTranscriptKV(env, audioKey, {
-      status: "complete",
-      text: full
-    });
-
-    return full;
   }
 }
 
@@ -393,8 +413,6 @@ export async function handleAudioUpload(
       description: ""
     };
 
-    ctx.waitUntil(processEpisodeInBackground(env, file.name, sessionId));
-
     return new Response(
       JSON.stringify({
         message: "Audio uploaded successfully",
@@ -411,97 +429,6 @@ export async function handleAudioUpload(
       headers: { "Content-Type": "application/json" }
     });
   }
-}
-
-async function processEpisodeInBackground(
-  env: Env,
-  episodeId: string,
-  sessionId: string
-) {
-  const cached = await getTranscriptKV(env, episodeId);
-
-  if (cached?.status === "complete") {
-    console.log("Transcript cache hit:", episodeId);
-  } else {
-    const transcriber = await getAgentByName<Env, Transcriber>(
-      env.Transcriber,
-      sessionId
-    );
-    await transcriber.transcribeAudio(episodeId);
-  }
-
-  let finalTranscript = "";
-  const transcriptKV = (await getTranscriptKV(env, episodeId)) as TranscriptKV;
-
-  if (transcriptKV.status === "error") {
-    console.error(transcriptKV.message);
-    return;
-  } else {
-    finalTranscript = transcriptKV.text;
-  }
-
-  const inserts = await generatePrimerAndSummary(
-    env,
-    episodeId,
-    finalTranscript
-  );
-
-  await env.KV.put(`inserts:${episodeId}`, JSON.stringify(inserts));
-}
-
-async function generatePrimerAndSummary(
-  env: Env,
-  episodeId: string,
-  transcript: string
-): Promise<Insert[]> {
-  // 1. Generate primer text
-  const primer = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
-    messages: [
-      {
-        role: "system",
-        content: PRIMER_GENERATION_PROMPT
-      },
-      {
-        role: "user",
-        content: transcript
-      }
-    ]
-  });
-
-  const primerText = primer.response;
-
-  if (!primerText) return [];
-
-  // 2. Convert primer to audio
-  // TODO -- use chatterbox
-  const { audio }: any = await env.AI.run("@cf/myshell-ai/melotts", {
-    prompt: primerText.trim(),
-    lang: "en"
-  });
-  // const expl_audio: any = await replicate.run(
-  //   "chatterbox/",
-  //   { input: { language: "EN", text: item.trim() } }
-  // );
-
-  // 3. Store in R2
-  const audioKey = `${episodeId}-intro.mp3`;
-
-  await env.R2_AUDIO_BUCKET.put(audioKey, base64ToUint8Array(audio));
-
-  // 4. Return an Insert
-  return [
-    {
-      id: crypto.randomUUID(),
-      type: "primer_intro",
-      audioUrl: audioKey,
-      startTime: 0, // TODO
-      title: "",
-      duration: 0,
-      endTime: 0,
-      enabled: false,
-      metadata: {}
-    }
-  ];
 }
 
 export async function handleR2Query(request: Request, env: Env, key: string) {
@@ -524,82 +451,220 @@ export async function handleR2Query(request: Request, env: Env, key: string) {
   }
 }
 
-export class InsertsStreamer extends Agent<Env> {
-  async onRequest(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-    const parts = url.pathname.split("/");
-    const episodeId = parts[3];
+export function chunkTranscript(
+  segments: TranscriptSegment[],
+  windowSeconds = 60,
+  overlapSeconds = 5
+): TranscriptSegment[] {
+  if (!segments.length) return [];
 
-    if (!episodeId) {
-      return new Response("Missing episodeId", { status: 400 });
+  const chunks: TranscriptSegment[] = [];
+
+  let buffer: TranscriptSegment[] = [];
+  let windowStart = segments[0].startTime;
+
+  for (const seg of segments) {
+    buffer.push(seg);
+
+    const windowEnd = seg.endTime;
+    const duration = windowEnd - windowStart;
+
+    if (duration >= windowSeconds) {
+      chunks.push({
+        startTime: windowStart,
+        endTime: windowEnd,
+        text: buffer.map((s) => s.text).join(" "),
+        id: "",
+        speaker: ""
+      });
+
+      // Slide window forward with overlap
+      const cutoff = windowEnd - overlapSeconds;
+      buffer = buffer.filter((s) => s.endTime > cutoff);
+      windowStart = buffer[0]?.startTime ?? windowEnd;
     }
+  }
 
-    const stream = new TransformStream();
-    const writer = stream.writable.getWriter();
-    const encoder = new TextEncoder();
+  if (buffer.length) {
+    chunks.push({
+      startTime: windowStart,
+      endTime: buffer[buffer.length - 1].endTime,
+      text: buffer.map((s) => s.text).join(" "),
+      id: "",
+      speaker: ""
+    });
+  }
 
-    (async () => {
-      try {
-        let transcript = "";
-        let attempts = 0;
-        const maxAttempts = 30; // 30 attempts * 2 seconds = 60 seconds timeout
+  return chunks;
+}
 
-        // 1. Poll KV for the transcript (wait for Transcriber to start)
-        while (!transcript && attempts < maxAttempts) {
-          transcript = (await env.KV.get(`transcript:${episodeId}`)) || "";
+export async function generateInsertsForChunk(
+  env: Env,
+  episodeId: string,
+  chunk: TranscriptSegment
+): Promise<Insert[]> {
+  const plan = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
+    messages: [
+      {
+        role: "system",
+        content: `
+You are an audio editor.
 
-          if (!transcript) {
-            // Optional: send a heartbeat or "waiting" status to the client
-            await writer.write(encoder.encode(": keep-alive\n\n"));
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-            attempts++;
-          }
-        }
+You are given a transcript chunk with a start and end time.
+Create inserts ONLY if they belong within this time window.
 
-        if (!transcript) {
-          await writer.write(
-            encoder.encode("[Timeout: Transcript not found]\n")
-          );
-          return;
-        }
-
-        // 2. Generate inserts based on the (potentially partial) transcript
-        // Note: You could add logic here to wait until the transcript is
-        // a certain length before generating.
-        const inserts: Insert[] = await this.generateInserts(
-          episodeId,
-          transcript
-        );
-
-        for (const insert of inserts) {
-          await writer.write(encoder.encode(JSON.stringify(insert) + "\n"));
-        }
-
-        // 3. Save the generated inserts back to KV for persistence
-        await env.KV.put(`inserts:${episodeId}`, JSON.stringify(inserts));
-      } catch (err) {
-        console.error("Error generating inserts:", err);
-        await writer.write(encoder.encode("[Error generating inserts]\n"));
-      } finally {
-        await writer.close();
+If no insert is needed, return an empty JSON array.
+`
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          startTime: chunk.startTime,
+          endTime: chunk.endTime,
+          transcript: chunk.text
+        })
       }
-    })();
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            type: { type: "string" },
+            atTime: { type: "number" },
+            title: { type: "string" },
+            content: { type: "string" }
+          },
+          required: ["type", "atTime", "title", "content"]
+        }
+      }
+    }
+  });
 
-    return new Response(stream.readable, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive"
+  if (!Array.isArray(plan.response) || !plan.response.length) {
+    return [];
+  }
+
+  const inserts: Insert[] = [];
+
+  for (const item of plan.response) {
+    const { audio }: any = await env.AI.run("@cf/myshell-ai/melotts", {
+      prompt: item.content,
+      lang: "en"
+    });
+
+    const audioKey = `${episodeId}-${crypto.randomUUID()}.mp3`;
+
+    await env.R2_AUDIO_BUCKET.put(audioKey, base64ToUint8Array(audio));
+
+    const duration = await getAudioDuration(audio);
+
+    inserts.push({
+      id: crypto.randomUUID(),
+      type: item.type,
+      title: item.title,
+      startTime: item.atTime,
+      endTime: duration + item.atTime,
+      duration: duration,
+      audioUrl: audioKey,
+      enabled: true,
+      metadata: {
+        chunkStart: chunk.startTime,
+        chunkEnd: chunk.endTime
       }
     });
   }
 
-  async generateInserts(
-    episodeId: string,
-    transcript: string
-  ): Promise<Insert[]> {
-    return await generatePrimerAndSummary(env, episodeId, transcript);
+  return inserts;
+}
+
+export async function waitForTranscript(
+  env: Env,
+  episodeId: string,
+  timeoutMs = 90_000
+): Promise<TranscriptKV> {
+  const start = Date.now();
+
+  while (Date.now() - start < timeoutMs) {
+    const transcript = await getTranscriptKV(env, episodeId);
+
+    if (transcript?.status === "complete") {
+      return transcript;
+    }
+
+    if (transcript?.status === "error") {
+      throw new Error("Transcript failed");
+    }
+
+    await new Promise((r) => setTimeout(r, 2000));
   }
+
+  throw new Error("Transcript timeout");
+}
+
+export async function handleInsertsStream(
+  request: Request,
+  env: Env,
+  episodeId: string
+): Promise<Response> {
+  const stream = new TransformStream();
+  const writer = stream.writable.getWriter();
+  const encoder = new TextEncoder();
+
+  (async () => {
+    try {
+      const transcript = await waitForTranscript(env, episodeId);
+
+      if (transcript.status !== "complete") {
+        throw new Error("Transcript not complete");
+      }
+
+      const chunks = chunkTranscript(
+        transcript.segments,
+        60, // seconds per chunk
+        5 // overlap
+      );
+
+      const allInserts: Insert[] = [];
+
+      for (const chunk of chunks) {
+        const inserts = await generateInsertsForChunk(env, episodeId, chunk);
+
+        for (const insert of inserts) {
+          allInserts.push(insert);
+          await sendEvent(insert, writer, encoder);
+        }
+      }
+
+      await env.KV.put(`inserts:${episodeId}`, JSON.stringify(allInserts));
+
+      await sendEvent({ type: "complete" }, writer, encoder);
+    } catch (err: any) {
+      console.error("Insert stream failed", err);
+      await sendEvent(
+        {
+          type: "error",
+          message: err.message || "Insert generation failed"
+        },
+        writer,
+        encoder
+      );
+    } finally {
+      await writer.close();
+    }
+  })().catch((err) => {
+    console.error(err);
+  });
+
+  return new Response(stream.readable, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive"
+    }
+  });
 }
 
 /**
@@ -661,12 +726,8 @@ export default {
           env.Transcriber,
           sessionId
         );
-        const newRequest = new Request(request.url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" }
-        });
 
-        return transcriber.fetch(newRequest);
+        return transcriber.fetch(request);
       }
 
       // GET /api/episodes/:id/inserts-stream
@@ -676,88 +737,7 @@ export default {
         parts[4] === "inserts-stream"
       ) {
         const episodeId = parts[3];
-
-        // Create a streaming response
-        const stream = new TransformStream();
-        const writer = stream.writable.getWriter();
-        const encoder = new TextEncoder();
-
-        ctx.waitUntil(
-          new Promise(async () => {
-            try {
-              // Check if we already have inserts
-              const cachedInserts = await env.KV.get(`inserts:${episodeId}`);
-
-              if (cachedInserts) {
-                // Stream cached inserts
-                const inserts = JSON.parse(cachedInserts);
-                for (const insert of inserts) {
-                  writer.write(encoder.encode(JSON.stringify(insert) + "\n"));
-                }
-              } else {
-                // Wait for transcript first
-                let transcript = "";
-                let attempts = 0;
-                const maxAttempts = 60; // Wait up to 2 minutes
-
-                while (!transcript && attempts < maxAttempts) {
-                  transcript =
-                    (await env.KV.get(`transcript:${episodeId}`)) || "";
-                  if (!transcript) {
-                    // Send keep-alive
-                    writer.write(
-                      encoder.encode(": waiting-for-transcript\n\n")
-                    );
-                    await new Promise((resolve) => setTimeout(resolve, 2000));
-                    attempts++;
-                  }
-                }
-
-                if (!transcript) {
-                  writer.write(
-                    encoder.encode("[Error: Transcript not available]\n")
-                  );
-                  writer.close();
-                  return;
-                }
-
-                // Generate inserts
-                const streamer = await getAgentByName<Env, InsertsStreamer>(
-                  env.InsertsStreamer,
-                  sessionId!
-                );
-                const inserts = await streamer.generateInserts(
-                  episodeId,
-                  transcript
-                );
-
-                // Stream inserts
-                for (const insert of inserts) {
-                  writer.write(encoder.encode(JSON.stringify(insert) + "\n"));
-                }
-
-                // Cache inserts
-                await env.KV.put(
-                  `inserts:${episodeId}`,
-                  JSON.stringify(inserts)
-                );
-              }
-            } catch (error: any) {
-              console.error("Inserts stream error:", error);
-              writer.write(encoder.encode(`[Error: ${error.message}]\n`));
-            } finally {
-              writer.close();
-            }
-          })
-        );
-
-        return new Response(stream.readable, {
-          headers: {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            Connection: "keep-alive"
-          }
-        });
+        return handleInsertsStream(request, env, episodeId);
       }
     }
 

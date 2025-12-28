@@ -8,10 +8,15 @@ import type {
 } from "ai";
 import { convertToModelMessages, isToolUIPart } from "ai";
 import { APPROVAL } from "./shared";
+import { parseBuffer } from "music-metadata";
+import type { Phrase, TranscriptSegment, Word } from "./types/audio-types";
 
 export type TranscriptKV =
-  | { status: "complete"; text: string }
-  | { status: "in_progress"; text: string }
+  | {
+      status: "complete";
+      segments: TranscriptSegment[];
+    }
+  | { status: "in_progress"; segments: TranscriptSegment[] }
   | { status: "error"; message: string };
 
 export const transcriptKey = (id: string) => `transcript:${id}`;
@@ -23,21 +28,25 @@ export async function getTranscriptKV(
   const raw = await env.KV.get(transcriptKey(id));
   if (!raw) return null;
 
-  // Backwards compatibility: plain text transcript
-  if (!raw.trim().startsWith("{")) {
-    return {
-      status: "complete",
-      text: raw
-    };
-  }
-
   try {
-    return JSON.parse(raw) as TranscriptKV;
+    const parsed = JSON.parse(raw);
+
+    if (parsed && parsed.segments && Array.isArray(parsed.segments)) {
+      const validatedSegments = parsed.segments.map((seg: any) => ({
+        text: seg.text || "",
+        startTime: seg.startTime || "00:00:00",
+        endTime: seg.endTime || "unknown"
+      }));
+
+      return {
+        ...parsed,
+        segments: validatedSegments
+      } as TranscriptKV;
+    }
+
+    return null;
   } catch {
-    return {
-      status: "complete",
-      text: raw
-    };
+    return null;
   }
 }
 
@@ -47,6 +56,108 @@ export async function putTranscriptKV(
   value: TranscriptKV
 ) {
   await env.KV.put(transcriptKey(id), JSON.stringify(value));
+}
+
+// For inserts generation, not yet used
+const WORDS_PER_MINUTE = 155;
+const MIN_MINUTES = 9;
+export const MIN_WORDS = WORDS_PER_MINUTE * MIN_MINUTES;
+
+export async function getAudioDuration(
+  arrayBuffer: ArrayBuffer
+): Promise<number> {
+  const metadata = await parseBuffer(Buffer.from(arrayBuffer), "audio/mpeg");
+  return metadata.format.duration || 0;
+}
+
+export const sendEvent = async (
+  data: unknown,
+  writer: WritableStreamDefaultWriter,
+  encoder?: TextEncoder
+) => {
+  if (!encoder) encoder = new TextEncoder();
+  await writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+};
+
+export function extractPhrases(words: Word[]) {
+  const phrases: Phrase[] = [];
+  let current: Word[] = [];
+
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    current.push(w);
+
+    const next = words[i + 1];
+    const duration = current[current.length - 1].end - current[0].start;
+    const wordCount = current.length;
+
+    let shouldSplit = false;
+
+    // 1. Hard boundary: pause
+    if (next && next.start - w.end >= 0.6) {
+      shouldSplit = true;
+    }
+
+    // 2. Hard boundary: terminal punctuation
+    if (/[.!?]$/.test(w.word)) {
+      shouldSplit = true;
+    }
+
+    // 3. Soft boundary: clause punctuation
+    if (/,|;|:$/.test(w.word) && duration >= 2.5 && wordCount >= 5) {
+      shouldSplit = true;
+    }
+
+    // 4. Safety caps
+    if (duration >= 7 || wordCount >= 25) {
+      shouldSplit = true;
+    }
+
+    if (shouldSplit) {
+      phrases.push(makePhrase(current));
+      current = [];
+    }
+  }
+
+  if (current.length) {
+    phrases.push(makePhrase(current));
+  }
+
+  return phrases;
+}
+
+function makePhrase(words: Word[]): Phrase {
+  if (words.length === 0) {
+    throw new Error("makePhrase called with empty word list");
+  }
+
+  const start = words[0].start;
+  const end = words[words.length - 1].end;
+
+  // Normalize text:
+  // - single spaces
+  // - no space before punctuation
+  // - preserve ASR punctuation if present
+  const text = words
+    .map((w) => w.word)
+    .join(" ")
+    .replace(/\s+([,.!?;:])/g, "$1")
+    .trim();
+
+  const id =
+    "p_" +
+    Math.floor(start * 100).toString() +
+    "_" +
+    Math.floor(end * 100).toString();
+
+  return {
+    id,
+    text,
+    start,
+    end,
+    wordCount: words.length,
+    words
+  };
 }
 
 function isValidToolName<K extends PropertyKey, T extends object>(

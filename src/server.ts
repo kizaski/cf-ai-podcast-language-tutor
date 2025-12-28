@@ -34,6 +34,7 @@ import type {
   Episode,
   EpisodeData,
   Insert,
+  Phrase,
   TranscriptSegment,
   Word
 } from "./types/audio-types";
@@ -145,64 +146,70 @@ export class Transcriber extends Agent<Env> {
       if (cached?.status === "complete") {
         console.log("have cached transcript.");
 
+        console.log("first: ", cached.segments[0]);
+
         for (const segment of cached.segments) {
           await sendEvent(segment, writer, encoder);
         }
-      }
+      } else {
+        let accumulated: TranscriptSegment[] =
+          cached?.status === "in_progress" ? cached.segments : [];
 
-      let accumulated: TranscriptSegment[] =
-        cached?.status === "in_progress" ? cached.segments : [];
-
-      try {
-        await putTranscriptKV(env, audioKey, {
-          status: "in_progress",
-          segments: accumulated
-        });
-
-        // TODO -- fix transcription starting over instead of continuing
-        for await (const whisper_output of this.transcribe(audioKey)) {
-          const words = whisper_output.words ?? [];
-
-          if (!words.length) continue;
-
-          const phrases = extractPhrases(words as Word[]);
-
-          for (const phrase of phrases) {
-            const segment: TranscriptSegment = {
-              text: phrase.text,
-              startTime: phrase.start,
-              endTime: phrase.end,
-              id: phrase.id,
-              speaker: ""
-            };
-
-            await sendEvent(segment, writer, encoder);
-            accumulated.push(segment);
-          }
-
+        try {
           await putTranscriptKV(env, audioKey, {
             status: "in_progress",
             segments: accumulated
           });
-        }
 
-        // mark complete
-        await putTranscriptKV(env, audioKey, {
-          status: "complete",
-          segments: accumulated
-        });
-      } catch (err: any) {
-        await putTranscriptKV(env, audioKey, {
-          status: "error",
-          message: err.message ?? "transcription failed"
-        });
-        await sendEvent(
-          { error: "[Error during transcription]" },
-          writer,
-          encoder
-        );
-      } finally {
-        await writer.close();
+          for await (const whisper_output of this.transcribe(audioKey)) {
+            const words = whisper_output.words ?? [];
+
+            if (!words.length) continue;
+
+            const phrases = extractPhrases(words as Word[]);
+
+            for (const phrase of phrases) {
+              const segment: TranscriptSegment = {
+                text: phrase.text,
+                startTime: phrase.start,
+                endTime: phrase.end,
+                id: phrase.id,
+                speaker: ""
+              };
+
+              await sendEvent(segment, writer, encoder);
+              accumulated.push(segment);
+            }
+
+            console.log(
+              "last during transcription: ",
+              accumulated[accumulated.length - 1]
+            );
+
+            await putTranscriptKV(env, audioKey, {
+              status: "in_progress",
+              segments: accumulated
+            });
+          }
+
+          // mark complete
+          await putTranscriptKV(env, audioKey, {
+            status: "complete",
+            segments: accumulated
+          });
+        } catch (err: any) {
+          await putTranscriptKV(env, audioKey, {
+            status: "error",
+            message: err.message ?? "transcription failed"
+          });
+          await sendEvent(
+            { error: "[Error during transcription]" },
+            writer,
+            encoder
+          );
+        } finally {
+          await writer.close();
+        }
       }
     })().catch((error) => {
       console.error("Unhandled error in Transcriber:", error);
@@ -225,18 +232,20 @@ export class Transcriber extends Agent<Env> {
   ): AsyncGenerator<Ai_Cf_Openai_Whisper_Output, void, unknown> {
     const chunks = await this.getAudioChunks(audioKey);
 
+    let accumulatedSegments: Phrase[] = [];
     let timeOffset = 0;
 
-    for (const chunk of chunks) {
-      // Get exact duration of this chunk
-      const durationSec = await getAudioDuration(chunk);
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+
+      let lastWordTimestamp = 0;
 
       // Transcribe this chunk
       const result = await this.transcribeChunk(chunk);
 
       // Normalize word timestamps using timeOffset
       if (result.words?.length) {
-        result.words = result.words
+        const normalizedWords = result.words
           .filter(
             (w): w is Word =>
               typeof w.start === "number" &&
@@ -248,13 +257,16 @@ export class Transcriber extends Agent<Env> {
             start: w.start + timeOffset,
             end: w.end + timeOffset
           }));
+        lastWordTimestamp = Math.max(...normalizedWords.map((w) => w.end));
+        result.words = normalizedWords;
+        const phrases = extractPhrases(normalizedWords);
+        accumulatedSegments.push(...phrases);
       }
 
       // Yield normalized chunk
       yield result;
 
-      // Increment timeOffset by this chunk’s duration
-      timeOffset += durationSec;
+      timeOffset = lastWordTimestamp;
     }
   }
 
@@ -283,16 +295,10 @@ export class Transcriber extends Agent<Env> {
       return { text: "[Empty chunk]" };
     }
 
-    const res = await env.AI.run("@cf/openai/whisper", {
+    return await env.AI.run("@cf/openai/whisper", {
       audio: byteArray,
       task: "transcribe"
     });
-
-    if (typeof res === "object" && "text" in res) {
-      return res;
-    }
-
-    throw new Error("Transcription failed or invalid response format");
   }
 }
 
@@ -396,8 +402,9 @@ export async function handleAudioUpload(
     const arrayBuffer = await file.arrayBuffer();
     // const timestamp = Date.now();
     // const fileNameExtended = `audio-${timestamp}-${file.name}`;
+    const fileNameNoExt = file.name.split(".")[0];
 
-    await env.R2_AUDIO_BUCKET.put(file.name, arrayBuffer, {
+    await env.R2_AUDIO_BUCKET.put(fileNameNoExt, arrayBuffer, {
       httpMetadata: {
         contentType: file.type
       }
@@ -405,10 +412,10 @@ export async function handleAudioUpload(
 
     // Create episode object
     const episode: Episode = {
-      id: file.name,
-      title: file.name,
+      id: fileNameNoExt,
+      title: fileNameNoExt,
       duration: 0, // can be calculated later
-      audioUrl: "/api/r2/" + file.name,
+      audioUrl: "/api/r2/" + fileNameNoExt,
       publishedDate: new Date().toISOString(),
       description: ""
     };
@@ -550,6 +557,8 @@ If no insert is needed, return an empty JSON array.
   const inserts: Insert[] = [];
 
   for (const item of plan.response) {
+    if (!item.content) continue;
+
     const { audio }: any = await env.AI.run("@cf/myshell-ai/melotts", {
       prompt: item.content,
       lang: "en"
@@ -557,7 +566,7 @@ If no insert is needed, return an empty JSON array.
 
     const audioKey = `${episodeId}-${crypto.randomUUID()}.mp3`;
 
-    await env.R2_AUDIO_BUCKET.put(audioKey, base64ToUint8Array(audio));
+    await env.R2_AUDIO_BUCKET.put(audioKey, base64ToUint8Array(audio).buffer);
 
     const duration = await getAudioDuration(audio);
 

@@ -34,7 +34,7 @@ export async function getTranscriptKV(
     if (parsed && parsed.segments && Array.isArray(parsed.segments)) {
       const validatedSegments = parsed.segments.map((seg: any) => ({
         text: seg.text || "",
-        startTime: seg.startTime || "00:00:00",
+        startTime: seg.startTime,
         endTime: seg.endTime || "unknown"
       }));
 

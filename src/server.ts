@@ -1,6 +1,5 @@
 import {
   Agent,
-  getAgentByName,
   routeAgentRequest,
   type Connection,
   type ConnectionContext,
@@ -22,7 +21,6 @@ import {
 import {
   processToolCalls,
   cleanupMessages,
-  base64ToUint8Array,
   getTranscriptKV,
   putTranscriptKV,
   type TranscriptKV,

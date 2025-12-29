@@ -7,6 +7,7 @@ import { EmptyAudioPlayer } from "./EmptyAudioPlayer";
 import { AudioPlayerPanelInner } from "./AudioPlayerPanelInner";
 import { useEffect, type Dispatch, type SetStateAction } from "react";
 import { useAgent } from "agents/react";
+import Cookies from "js-cookie";
 
 export interface AudioPlayerPanelProps {
   episodeData?: EpisodeData;
@@ -22,7 +23,7 @@ export const AudioPlayerPanel = ({
   // TODO -- move, add buttons
   const transcriber = useAgent({
     agent: "transcriber",
-    name: "transcriber",
+    name: Cookies.get("session_id"),
     query: {
       audioKey: initialData.episode.id
     },

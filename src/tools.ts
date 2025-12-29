@@ -5,9 +5,10 @@
 import { tool, type ToolSet } from "ai";
 import { z } from "zod/v3";
 
-import type { Chat } from "./server";
-import { getCurrentAgent } from "agents";
+import { type Chat, type Transcriber } from "./server";
+import { getAgentByName, getCurrentAgent } from "agents";
 import { scheduleSchema } from "agents/schedule";
+import { env } from "cloudflare:workers";
 
 /**
  * Weather information tool that requires human confirmation
@@ -108,6 +109,30 @@ const cancelScheduledTask = tool({
   }
 });
 
+// TODO -- interruptPlaybackWithAnswer
+const answerUserPrompt = tool({
+  description:
+    "Answer ONLY if the user's prompt is about the current audio key", // a part of the podcast audio
+  inputSchema: z.object({
+    prompt: z.string().describe("The prompt the user gave.")
+  }),
+  execute: async ({ prompt }) => {
+    const { agent } = getCurrentAgent<Chat>();
+    try {
+      const transcriber = await getAgentByName<Env, Transcriber>(
+        env.Transcriber,
+        agent!.name
+      );
+      return {
+        audioKey: (await transcriber.state).audioKey
+      };
+    } catch (error) {
+      console.error(error);
+      return "Error in interruptPlaybackWithAnswer";
+    }
+  }
+});
+
 /**
  * Export all available tools
  * These will be provided to the AI model to describe available capabilities
@@ -117,7 +142,8 @@ export const tools = {
   getLocalTime,
   scheduleTask,
   getScheduledTasks,
-  cancelScheduledTask
+  cancelScheduledTask,
+  answerUserPrompt
 } satisfies ToolSet;
 
 /**

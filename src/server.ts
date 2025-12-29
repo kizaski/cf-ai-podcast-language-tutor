@@ -226,7 +226,7 @@ export class Transcriber extends Agent<Env, TranscriberState> {
             message: err.message ?? "transcription failed"
           });
           await sendEvent(
-            { error: "[Error during transcription]" },
+            { error: `[Error during transcription: ${err.message}]` },
             writer,
             encoder
           );
@@ -419,7 +419,10 @@ export async function handleAudioUpload(
     const arrayBuffer = await file.arrayBuffer();
     // const timestamp = Date.now();
     // const fileNameExtended = `audio-${timestamp}-${file.name}`;
-    const fileNameNoExt = file.name.split(".")[0];
+    const fileName = file.name;
+    const lastDotIndex = fileName.lastIndexOf(".");
+    const fileNameNoExt =
+      lastDotIndex === -1 ? fileName : fileName.slice(0, lastDotIndex);
 
     await env.R2_AUDIO_BUCKET.put(fileNameNoExt, arrayBuffer, {
       httpMetadata: {

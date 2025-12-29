@@ -32,10 +32,6 @@
 			{
 				"name": "Transcriber",
 				"class_name": "Transcriber"
-			},
-			{
-				"name": "InsertsStreamer",
-				"class_name": "InsertsStreamer"
 			}
 		]
 	},
@@ -56,7 +52,6 @@
 			"new_sqlite_classes": [
 				"Chat",
 				"Transcriber",
-				"InsertsStreamer"
 			]
 		}
 	],

@@ -2,7 +2,10 @@ import {
   Agent,
   getAgentByName,
   routeAgentRequest,
-  type Schedule
+  type Connection,
+  type ConnectionContext,
+  type Schedule,
+  type WSMessage
 } from "agents";
 
 import { AIChatAgent } from "agents/ai-chat-agent";
@@ -135,64 +138,29 @@ interface TranscriberState {
 
 export class Transcriber extends Agent<Env, TranscriberState> {
   async onRequest(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-    const audioKey = url.pathname.split("/")[3];
-    if (!audioKey) {
-      return new Response("Missing audioKey", { status: 400 });
-    }
-
-    this.setState({
-      audioKey
-    });
-
-    if (request.method === "GET") {
-      // Create a request-scoped stream
-      const stream = new TransformStream();
-      const writer = stream.writable.getWriter();
-      const encoder = new TextEncoder();
-
-      // Start the transcription task in the background
-      this.runTranscriptionTask(writer, encoder).catch((err) => {
-        console.error(err);
-      });
-
-      // Return the readable side of the stream to the client
-      return new Response(stream.readable, {
-        headers: {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache"
-        }
-      });
-    }
-
     return new Response("Method not allowed", { status: 405 });
   }
 
-  async runTranscriptionTask(
-    writer: WritableStreamDefaultWriter,
-    encoder: TextEncoder
-  ) {
-    const cached = await getTranscriptKV(env, this.state.audioKey);
+  async runTranscriptionTask(connection: Connection, audioKey: string) {
+    const cached = await getTranscriptKV(env, audioKey);
 
     try {
       if (cached?.status === "complete") {
         // Send cached segments
         for (const segment of cached.segments) {
-          await sendEvent(segment, writer, encoder);
+          connection.send(JSON.stringify(segment));
         }
       } else {
         let accumulated: TranscriptSegment[] =
           cached?.status === "in_progress" ? cached.segments : [];
 
         try {
-          await putTranscriptKV(env, this.state.audioKey, {
+          await putTranscriptKV(env, audioKey, {
             status: "in_progress",
             segments: accumulated
           });
 
-          for await (const whisper_output of this.transcribe(
-            this.state.audioKey
-          )) {
+          for await (const whisper_output of this.transcribe(audioKey)) {
             const words = whisper_output.words ?? [];
             if (!words.length) continue;
 
@@ -206,38 +174,115 @@ export class Transcriber extends Agent<Env, TranscriberState> {
                 speaker: ""
               };
 
-              await sendEvent(segment, writer, encoder);
+              connection.send(JSON.stringify(segment));
               accumulated.push(segment);
             }
 
-            await putTranscriptKV(env, this.state.audioKey, {
+            await putTranscriptKV(env, audioKey, {
               status: "in_progress",
               segments: accumulated
             });
           }
 
-          await putTranscriptKV(env, this.state.audioKey, {
+          await putTranscriptKV(env, audioKey, {
             status: "complete",
             segments: accumulated
           });
         } catch (err: any) {
-          await putTranscriptKV(env, this.state.audioKey, {
+          await putTranscriptKV(env, audioKey, {
             status: "error",
             message: err.message ?? "transcription failed"
           });
-          await sendEvent(
-            { error: `[Error during transcription: ${err.message}]` },
-            writer,
-            encoder
+          connection.send(
+            JSON.stringify({
+              error: `[Error during transcription: ${err.message}]`
+            })
           );
         } finally {
-          await writer.close();
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      await writer.close();
+      connection.close(1008, error);
+      return;
     }
+  }
+  async onConnect(connection: Connection, ctx: ConnectionContext) {
+    try {
+      // The query parameters from useAgent should be in the connection URL
+      const urlStr = connection.url || ctx.request?.url;
+
+      if (!urlStr) {
+        console.error("No URL available");
+        connection.close(1008, "Connection URL missing");
+        return;
+      }
+
+      console.log("Connection URL:", urlStr);
+      const url = new URL(urlStr);
+
+      // Extract query parameters sent by useAgent
+      const audioKey = url.searchParams.get("audioKey");
+
+      if (!audioKey) {
+        console.error("No audioKey provided in query parameters");
+        connection.close(1008, "audioKey query parameter is required");
+        return;
+      }
+
+      // Store in connection state for later use
+      connection.setState({
+        audioKey,
+        connectionId: connection.id,
+        connectedAt: Date.now()
+      });
+
+      // Send acknowledgment
+      connection.send(
+        JSON.stringify({
+          type: "connected",
+          message: "Transcription connection established",
+          audioKey,
+          timestamp: Date.now()
+        })
+      );
+
+      // Start transcription process with the audioKey
+      await this.runTranscriptionTask(connection, audioKey);
+    } catch (error: any) {
+      console.error("Error in onConnect:", error);
+
+      try {
+        await connection.send(
+          JSON.stringify({
+            type: "error",
+            error: "Failed to establish connection",
+            details: error.message
+          })
+        );
+        await connection.close(1011, "Internal server error");
+      } catch (closeError) {
+        console.error("Error closing connection:", closeError);
+      }
+    }
+  }
+
+  async onMessage(connection: Connection, message: WSMessage) {
+    console.log("msg rcv: ", message);
+  }
+
+  async onError(error: unknown) {
+    console.error(`WS error: ${error}`);
+  }
+
+  async onClose(
+    connection: Connection,
+    code: number,
+    reason: string,
+    wasClean: boolean
+  ): Promise<void> {
+    console.log(`WS closed: ${code} - ${reason} - wasClean: ${wasClean}`);
+    connection.close();
   }
 
   /**
@@ -638,6 +683,7 @@ export async function handleInsertsStream(
   env: Env,
   episodeId: string
 ): Promise<Response> {
+  return new Response("Inserts stream temporarily off", { status: 405 });
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
   const encoder = new TextEncoder();
@@ -751,12 +797,13 @@ export default {
         parts.length === 5 &&
         lastPart === "transcribe-stream"
       ) {
-        const transcriber = await getAgentByName<Env, Transcriber>(
-          env.Transcriber,
-          sessionId
-        );
+        return new Response("Inserts stream temporarily off", { status: 405 });
+        // const transcriber = await getAgentByName<Env, Transcriber>(
+        //   env.Transcriber,
+        //   sessionId
+        // );
 
-        return transcriber.fetch(request);
+        // return transcriber.fetch(request);
       }
 
       // GET /api/episodes/:id/inserts-stream

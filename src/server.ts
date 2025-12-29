@@ -678,6 +678,7 @@ export async function waitForTranscript(
   throw new Error("Transcript timeout");
 }
 
+// TODO -- put inside agent
 export async function handleInsertsStream(
   request: Request,
   env: Env,
@@ -790,20 +791,6 @@ export default {
       if (request.method === "GET" && parts.length === 4) {
         // const episodeId = parts[3];
         return handleAudioQuery(request, env, lastPart);
-      }
-
-      if (
-        request.method === "GET" &&
-        parts.length === 5 &&
-        lastPart === "transcribe-stream"
-      ) {
-        return new Response("Inserts stream temporarily off", { status: 405 });
-        // const transcriber = await getAgentByName<Env, Transcriber>(
-        //   env.Transcriber,
-        //   sessionId
-        // );
-
-        // return transcriber.fetch(request);
       }
 
       // GET /api/episodes/:id/inserts-stream

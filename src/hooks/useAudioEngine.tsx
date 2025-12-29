@@ -19,7 +19,7 @@ export const useAudioEngine = ({
   episodeData,
   onTimeUpdate,
   onPlayStateChange,
-  insertMode = "overlap" // TODO -- fix "pre" - plays main audio in background
+  insertMode = "pre" // TODO -- fix "pre" - plays main audio in background
 }: UseAudioEngineProps) => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const mainAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -174,89 +174,83 @@ export const useAudioEngine = ({
   /* ---------- TIME LOOP ---------- */
   const startAnimationLoop = useCallback(() => {
     const loop = () => {
-      if (mainAudioRef.current && isPlaying) {
-        const currentTime = mainAudioRef.current.currentTime;
-        setCurrentTime(currentTime);
-        onTimeUpdate?.(currentTime);
-
-        // Check for inserts to trigger
-        episodeData.inserts.forEach((insert) => {
-          const bufferData = insertBuffersRef.current.get(insert.id);
-
-          if (
-            insert.enabled &&
-            bufferData &&
-            !triggeredInsertsRef.current.has(insert.id) &&
-            !activeInsertSourcesRef.current.has(insert.id) &&
-            currentTime >= insert.startTime &&
-            currentTime < insert.endTime
-          ) {
-            // Mark as triggered
-            triggeredInsertsRef.current.add(insert.id);
-
-            // Add to queue for sequential playback
-            insertQueueRef.current.push({
-              insertId: insert.id,
-              buffer: bufferData.buffer
-            });
-
-            // If no insert is currently playing, start playing from queue
-            if (activeInsertSourcesRef.current.size === 0) {
-              playNextInsertInQueue();
-            }
-          }
-
-          // Reset triggered state if we've passed the insert
-          if (currentTime < insert.startTime) {
-            triggeredInsertsRef.current.delete(insert.id);
-
-            // Also remove from queue if it hasn't played yet
-            insertQueueRef.current = insertQueueRef.current.filter(
-              (item) => item.insertId !== insert.id
-            );
-          }
-        });
-
+      if (!mainAudioRef.current || !isPlaying || !audioContextRef.current) {
         animationRef.current = requestAnimationFrame(loop);
+        return;
       }
+
+      const currentTime = mainAudioRef.current.currentTime;
+      setCurrentTime(currentTime);
+      onTimeUpdate?.(currentTime);
+
+      episodeData.inserts.forEach((insert) => {
+        const bufferData = insertBuffersRef.current.get(insert.id);
+        if (!insert.enabled || !bufferData) return;
+
+        const insertEndTime = insert.startTime + bufferData.buffer.duration;
+
+        // Trigger if not yet played and currentTime has reached startTime
+        if (
+          insert.enabled &&
+          bufferData &&
+          !triggeredInsertsRef.current.has(insert.id) &&
+          !activeInsertSourcesRef.current.has(insert.id) &&
+          currentTime >= insert.startTime &&
+          currentTime < insert.endTime
+        ) {
+          triggeredInsertsRef.current.add(insert.id);
+          insertQueueRef.current.push({
+            insertId: insert.id,
+            buffer: bufferData.buffer
+          });
+
+          if (activeInsertSourcesRef.current.size === 0) {
+            playNextInsertInQueue();
+          }
+        }
+
+        // Reset triggered state if we rewind before insert
+        if (currentTime < insert.startTime) {
+          triggeredInsertsRef.current.delete(insert.id);
+          insertQueueRef.current = insertQueueRef.current.filter(
+            (item) => item.insertId !== insert.id
+          );
+        }
+      });
+
+      animationRef.current = requestAnimationFrame(loop);
     };
 
-    // Clear any existing loop
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-    }
-
+    if (animationRef.current) cancelAnimationFrame(animationRef.current);
     animationRef.current = requestAnimationFrame(loop);
-  }, [isPlaying, onTimeUpdate, episodeData.inserts]);
+  }, [isPlaying, episodeData.inserts, onTimeUpdate]);
 
   /* ---------- QUEUE MANAGEMENT ---------- */
   const playNextInsertInQueue = useCallback(async () => {
     if (!audioContextRef.current || !mainGainRef.current) return;
 
-    const ctx = audioContextRef.current;
-
-    // Get next insert from queue
     const nextItem = insertQueueRef.current.shift();
     if (!nextItem) return;
 
     const { insertId, buffer } = nextItem;
     const insert = episodeData.inserts.find((i) => i.id === insertId);
-
     if (!insert || activeInsertSourcesRef.current.has(insertId)) {
-      // Try next in queue
       playNextInsertInQueue();
       return;
     }
 
-    // Duck main audio
+    const ctx = audioContextRef.current;
+    if (ctx.state === "suspended") await ctx.resume();
+
     const mainGain = mainGainRef.current;
     const now = ctx.currentTime;
 
+    // Duck main audio
     mainGain.gain.cancelScheduledValues(now);
-    mainGain.gain.setValueAtTime(1, now);
+    mainGain.gain.setValueAtTime(mainGain.gain.value, now);
     mainGain.gain.linearRampToValueAtTime(0.3, now + 0.1);
 
-    // Create insert source
+    // Create new insert source
     const source = ctx.createBufferSource();
     const insertGain = ctx.createGain();
     insertGain.gain.value = 1;
@@ -264,7 +258,6 @@ export const useAudioEngine = ({
     source.buffer = buffer;
     source.connect(insertGain).connect(ctx.destination);
 
-    // Store reference
     activeInsertSourcesRef.current.set(insertId, {
       source,
       gain: insertGain,
@@ -272,23 +265,17 @@ export const useAudioEngine = ({
       duration: buffer.duration
     });
 
-    // Start playback
     source.start();
 
-    // Set up onended handler
     source.onended = () => {
-      // Remove from active sources
       activeInsertSourcesRef.current.delete(insertId);
 
-      // Restore main audio volume
-      if (mainGain) {
-        const endTime = ctx.currentTime;
-        mainGain.gain.cancelScheduledValues(endTime);
-        mainGain.gain.setValueAtTime(0.3, endTime);
-        mainGain.gain.linearRampToValueAtTime(1, endTime + 0.3);
-      }
+      // Restore main audio
+      const endTime = ctx.currentTime;
+      mainGain.gain.cancelScheduledValues(endTime);
+      mainGain.gain.setValueAtTime(mainGain.gain.value, endTime);
+      mainGain.gain.linearRampToValueAtTime(1, endTime + 0.3);
 
-      // Clean up nodes
       source.disconnect();
       insertGain.disconnect();
 
@@ -463,25 +450,26 @@ export const useAudioEngine = ({
 
     if (ctx.state === "suspended") await ctx.resume();
 
-    if (insertMode === "pre") {
-      await playWithInsertPauses();
-      return; // main audio will already play inside playWithInsertPauses
-    }
-
-    // Play main audio
-    await mainAudioRef.current.play();
     setIsPlaying(true);
     onPlayStateChange?.(true);
 
-    if (insertMode === "overlap") {
-      startAnimationLoop();
+    if (insertMode === "pre") {
+      // Play main audio with pauses for inserts
+      await playWithInsertPauses();
+    } else {
+      // Overlap mode: play main audio normally
+      await mainAudioRef.current.play();
     }
+
+    // Always start animation loop to update currentTime and trigger onTimeUpdate
+    startAnimationLoop();
   }, [
     episodeData.inserts,
     insertMode,
     playInsertNow,
     onPlayStateChange,
-    startAnimationLoop
+    startAnimationLoop,
+    playWithInsertPauses
   ]);
 
   const pause = useCallback(() => {

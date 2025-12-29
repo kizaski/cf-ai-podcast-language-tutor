@@ -25,7 +25,8 @@ import {
   type TranscriptKV,
   getAudioDuration,
   sendEvent,
-  extractPhrases
+  extractPhrases,
+  base64ToArrayBuffer
 } from "./utils";
 import { tools, executions } from "./tools";
 import { createWorkersAI } from "workers-ai-provider";
@@ -128,7 +129,11 @@ If the user asks to schedule a task, use the schedule tool to schedule the task.
   }
 }
 
-export class Transcriber extends Agent<Env> {
+interface TranscriberState {
+  audioKey: string;
+}
+
+export class Transcriber extends Agent<Env, TranscriberState> {
   async onRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const audioKey = url.pathname.split("/")[3];
@@ -136,18 +141,42 @@ export class Transcriber extends Agent<Env> {
       return new Response("Missing audioKey", { status: 400 });
     }
 
-    const cached = await getTranscriptKV(env, audioKey);
+    this.setState({
+      audioKey
+    });
 
-    const stream = new TransformStream();
-    const writer = stream.writable.getWriter();
-    const encoder = new TextEncoder();
+    if (request.method === "GET") {
+      // Create a request-scoped stream
+      const stream = new TransformStream();
+      const writer = stream.writable.getWriter();
+      const encoder = new TextEncoder();
 
-    (async () => {
+      // Start the transcription task in the background
+      this.runTranscriptionTask(writer, encoder).catch((err) => {
+        console.error(err);
+      });
+
+      // Return the readable side of the stream to the client
+      return new Response(stream.readable, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache"
+        }
+      });
+    }
+
+    return new Response("Method not allowed", { status: 405 });
+  }
+
+  async runTranscriptionTask(
+    writer: WritableStreamDefaultWriter,
+    encoder: TextEncoder
+  ) {
+    const cached = await getTranscriptKV(env, this.state.audioKey);
+
+    try {
       if (cached?.status === "complete") {
-        console.log("have cached transcript.");
-
-        console.log("first: ", cached.segments[0]);
-
+        // Send cached segments
         for (const segment of cached.segments) {
           await sendEvent(segment, writer, encoder);
         }
@@ -156,18 +185,18 @@ export class Transcriber extends Agent<Env> {
           cached?.status === "in_progress" ? cached.segments : [];
 
         try {
-          await putTranscriptKV(env, audioKey, {
+          await putTranscriptKV(env, this.state.audioKey, {
             status: "in_progress",
             segments: accumulated
           });
 
-          for await (const whisper_output of this.transcribe(audioKey)) {
+          for await (const whisper_output of this.transcribe(
+            this.state.audioKey
+          )) {
             const words = whisper_output.words ?? [];
-
             if (!words.length) continue;
 
             const phrases = extractPhrases(words as Word[]);
-
             for (const phrase of phrases) {
               const segment: TranscriptSegment = {
                 text: phrase.text,
@@ -181,24 +210,18 @@ export class Transcriber extends Agent<Env> {
               accumulated.push(segment);
             }
 
-            console.log(
-              "last during transcription: ",
-              accumulated[accumulated.length - 1]
-            );
-
-            await putTranscriptKV(env, audioKey, {
+            await putTranscriptKV(env, this.state.audioKey, {
               status: "in_progress",
               segments: accumulated
             });
           }
 
-          // mark complete
-          await putTranscriptKV(env, audioKey, {
+          await putTranscriptKV(env, this.state.audioKey, {
             status: "complete",
             segments: accumulated
           });
         } catch (err: any) {
-          await putTranscriptKV(env, audioKey, {
+          await putTranscriptKV(env, this.state.audioKey, {
             status: "error",
             message: err.message ?? "transcription failed"
           });
@@ -211,16 +234,10 @@ export class Transcriber extends Agent<Env> {
           await writer.close();
         }
       }
-    })().catch((error) => {
-      console.error("Unhandled error in Transcriber:", error);
-    });
-
-    return new Response(stream.readable, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache"
-      }
-    });
+    } catch (error) {
+      console.error(error);
+      await writer.close();
+    }
   }
 
   /**
@@ -566,7 +583,7 @@ If no insert is needed, return an empty JSON array.
 
     const audioKey = `${episodeId}-${crypto.randomUUID()}.mp3`;
 
-    await env.R2_AUDIO_BUCKET.put(audioKey, base64ToUint8Array(audio).buffer);
+    await env.R2_AUDIO_BUCKET.put(audioKey, base64ToArrayBuffer(audio));
 
     const duration = await getAudioDuration(audio);
 

@@ -17,7 +17,8 @@ export type TranscriptKV =
       segments: TranscriptSegment[];
     }
   | { status: "in_progress"; segments: TranscriptSegment[] }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string }
+  | { status: "pending" };
 
 export const transcriptKey = (id: string) => `transcript:${id}`;
 
@@ -292,6 +293,10 @@ export function base64ToUint8Array(base64Audio: string) {
   return bytes;
 }
 
-export function base64ToArrayBuffer(base64Audio: string) {
-  return base64ToUint8Array(base64Audio).buffer;
+export function base64ToArrayBuffer(base64Audio: string): ArrayBuffer {
+  const buffer = Buffer.from(base64Audio, "base64");
+  return buffer.buffer.slice(
+    buffer.byteOffset,
+    buffer.byteOffset + buffer.byteLength
+  );
 }

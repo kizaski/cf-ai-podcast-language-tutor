@@ -1,8 +1,7 @@
-import type { PlaybackState, Episode, Insert } from "@/types/audio-types";
+import type { PlaybackState, Insert } from "@/types/audio-types";
 import { formatTime } from "@/lib/utils";
 
 interface PlayerControlsProps {
-  episode: Episode;
   playbackState: PlaybackState;
   onPlayPause: () => void;
   onSeek: (time: number) => void;
@@ -19,7 +18,6 @@ interface PlayerControlsProps {
 }
 
 export const PlayerControls = ({
-  episode,
   playbackState,
   onPlayPause,
   onSeek,
@@ -37,7 +35,7 @@ export const PlayerControls = ({
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const clickPosition = (e.clientX - rect.left) / rect.width;
-    const newTime = clickPosition * episode.duration;
+    const newTime = clickPosition * playbackState.duration;
     onSeek(newTime);
   };
 
@@ -48,7 +46,7 @@ export const PlayerControls = ({
           <h2 className="text-lg font-semibold">Current Playback</h2>
           <p className="text-sm text-neutral-600 dark:text-neutral-400">
             {formatTime(playbackState.currentTime)} /{" "}
-            {formatTime(episode.duration)}
+            {formatTime(playbackState.duration)}
           </p>
           {isLoading && (
             <div className="mt-2">
@@ -110,7 +108,7 @@ export const PlayerControls = ({
                 className="absolute top-1/2 transform -translate-y-1/2 w-3 h-3 rounded-full cursor-pointer hover:scale-125 transition-transform z-10"
                 style={
                   {
-                    left: `${(insert.startTime / episode.duration) * 100}%`,
+                    left: `${(insert.startTime / playbackState.duration) * 100}%`,
                     backgroundColor: getInsertColor(insert.type),
                     boxShadow:
                       "0 0 0 2px white, 0 0 0 3px var(--tw-shadow-color)",
@@ -129,7 +127,7 @@ export const PlayerControls = ({
           <div
             className="absolute top-0 left-0 h-full bg-blue-600 rounded-full transition-all duration-100"
             style={{
-              width: `${(playbackState.currentTime / episode.duration) * 100}%`
+              width: `${(playbackState.currentTime / playbackState.duration) * 100}%`
             }}
           />
 
@@ -137,14 +135,14 @@ export const PlayerControls = ({
           <div
             className="absolute top-1/2 transform -translate-y-1/2 w-4 h-4 bg-blue-600 rounded-full -ml-2 shadow-lg"
             style={{
-              left: `${(playbackState.currentTime / episode.duration) * 100}%`
+              left: `${(playbackState.currentTime / playbackState.duration) * 100}%`
             }}
           />
         </div>
 
         <div className="flex justify-between text-sm">
           <span>{formatTime(playbackState.currentTime)}</span>
-          <span>{formatTime(episode.duration)}</span>
+          <span>{formatTime(playbackState.duration)}</span>
         </div>
 
         {/* Audio Controls */}

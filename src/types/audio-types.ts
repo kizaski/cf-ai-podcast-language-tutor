@@ -41,7 +41,8 @@ export interface PlaybackState {
   isPlaying: boolean;
   volume: number;
   playbackRate: number;
-  activeInserts: string[];
+  duration: number;
+  activeInserts: Insert[];
   playbackStartTime?: number;
   lastPauseTime?: number;
 }

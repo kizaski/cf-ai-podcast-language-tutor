@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Howl } from "howler";
+import { usePodcastPlaybackState } from "@/stores/usePlaybackstate";
 
 /* ---------------- Types ---------------- */
 
@@ -17,13 +18,14 @@ export interface PodcastPlayerState {
   isPlaying: boolean;
   currentTime: number;
   duration: number;
+  // currentTranscriptSegments: TranscriptSegment[];
 }
 
 /* ---------------- Hook ---------------- */
 
 export function usePodcastWithInserts(
   podcastUrl: string | null,
-  inserts: ScheduledInsert[]
+  inserts: ScheduledInsert[] | null
 ): PodcastPlayerState {
   const podcastRef = useRef<Howl | null>(null);
   const insertRef = useRef<Howl | null>(null);
@@ -35,9 +37,15 @@ export function usePodcastWithInserts(
 
   const podcastObjectUrlRef = useRef<string | null>(null);
 
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+
+  // Stores for additional Chat context
+  const setIsPlaying = usePodcastPlaybackState((state) => state.setIsPlaying);
+  const setCurrentTime = usePodcastPlaybackState(
+    (state) => state.setCurrentTime
+  );
+  const currentTime = usePodcastPlaybackState((state) => state.currentTime);
+  const isPlaying = usePodcastPlaybackState((state) => state.isPlaying);
 
   /* ---------------- Utils ---------------- */
 
@@ -124,7 +132,10 @@ export function usePodcastWithInserts(
   const startMonitoring = () => {
     stopMonitoring();
 
-    const sorted = [...inserts].sort((a, b) => a.startTime - b.startTime);
+    let sorted: ScheduledInsert[] = [];
+    if (inserts) {
+      sorted = [...inserts].sort((a, b) => a.startTime - b.startTime);
+    }
 
     monitorRef.current = window.setInterval(() => {
       const podcast = podcastRef.current;
@@ -135,7 +146,10 @@ export function usePodcastWithInserts(
       const t = podcast.seek(id) as number;
       setCurrentTime(t);
 
-      const next = sorted[insertIndexRef.current];
+      let next: ScheduledInsert | null = null;
+      if (inserts) {
+        next = sorted[insertIndexRef.current];
+      }
       if (!next) return;
 
       if (t >= next.startTime) {

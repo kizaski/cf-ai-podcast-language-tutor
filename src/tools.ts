@@ -6,10 +6,9 @@ import { tool, type ToolSet } from "ai";
 import { z } from "zod/v3";
 
 import { type Chat } from "./worker/agents/chat";
-import { type Transcriber } from "./worker/agents/transcriber";
-import { getAgentByName, getCurrentAgent } from "agents";
+import { getCurrentAgent } from "agents";
 import { scheduleSchema } from "agents/schedule";
-import { env } from "cloudflare:workers";
+import { TranscriptSegmentSchema } from "./types/audio-types";
 
 /**
  * Weather information tool that requires human confirmation
@@ -110,27 +109,44 @@ const cancelScheduledTask = tool({
   }
 });
 
-// TODO -- interruptPlaybackWithAnswer
 const answerUserPrompt = tool({
-  description:
-    "Answer ONLY if the user's prompt is about the current audio key", // a part of the podcast audio
+  description: "Answer questions about current and nearby podcast content",
   inputSchema: z.object({
-    prompt: z.string().describe("The prompt the user gave.")
+    prompt: z.string().describe("User's question about the podcast"),
+    word: z.string().describe("The word the user is asking about"),
+    currentTime: z
+      .number()
+      .describe("Current playback time in seconds")
+      .optional(),
+    currentTranscriptSegments: z
+      .array(TranscriptSegmentSchema)
+      .describe("Transcript segments currently playing")
+      .optional(),
+    isPlaying: z
+      .boolean()
+      .describe("Whether the podcast is currently playing")
+      .optional()
   }),
-  execute: async ({ prompt }) => {
-    const { agent } = getCurrentAgent<Chat>();
-    try {
-      const transcriber = await getAgentByName<Env, Transcriber>(
-        env.Transcriber,
-        agent!.name
-      );
-      return {
-        audioKey: (await transcriber.state).audioKey
-      };
-    } catch (error) {
-      console.error(error);
-      return "Error answering user's prompt";
-    }
+  execute: async ({
+    prompt,
+    currentTime,
+    currentTranscriptSegments,
+    isPlaying,
+    word
+  }) => {
+    console.log(
+      "currentTranscriptSegments received:",
+      currentTranscriptSegments
+    );
+    return {
+      success: true,
+      answerContext: `At ${currentTime?.toFixed(1) ?? 0}`,
+      currentTime,
+      segmentCount: currentTranscriptSegments?.length ?? 0,
+      currentTranscriptSegments: currentTranscriptSegments,
+      prompt,
+      isPlaying
+    };
   }
 });
 

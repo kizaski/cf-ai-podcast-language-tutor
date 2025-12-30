@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export interface Insert {
   id: string;
   type: "primer_intro" | "primer_outro" | "ad" | "transition";
@@ -19,6 +21,14 @@ export interface TranscriptSegment {
   text: string;
   speaker: string;
 }
+
+export const TranscriptSegmentSchema: z.ZodType<TranscriptSegment> = z.object({
+  id: z.string(),
+  startTime: z.number(),
+  endTime: z.number(),
+  text: z.string(),
+  speaker: z.string()
+});
 
 export interface Episode {
   id: string;
@@ -45,6 +55,7 @@ export interface PlaybackState {
   activeInserts: Insert[];
   playbackStartTime?: number;
   lastPauseTime?: number;
+  currentTranscriptSegments?: TranscriptSegment[];
 }
 
 export interface Word {

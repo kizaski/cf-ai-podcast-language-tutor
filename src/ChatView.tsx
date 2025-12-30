@@ -9,6 +9,7 @@ import { useAutoScroll } from "./hooks/useAutoScroll";
 import { useChatAgent } from "./hooks/useChatAgent";
 import { useEpisode } from "./hooks/useEpisode";
 import { useTextareaAutoResize } from "./hooks/useTextareaAutoResize";
+import { usePodcastPlaybackState } from "./stores/usePlaybackstate";
 
 export function ChatView({
   sessionId,
@@ -41,6 +42,12 @@ export function ChatView({
 
   const endRef = useAutoScroll([messages]);
   const textarea = useTextareaAutoResize();
+
+  const currentTranscriptSegments = usePodcastPlaybackState(
+    (state) => state.currentTranscriptSegments
+  );
+  const currentTime = usePodcastPlaybackState((state) => state.currentTime);
+  const isPlaying = usePodcastPlaybackState((state) => state.isPlaying);
 
   useEffect(() => {
     if (episodeId) fetchEpisode(episodeId);
@@ -77,7 +84,13 @@ export function ChatView({
           <ChatInput
             value={agentInput}
             onChange={handleAgentInputChange}
-            onSubmit={handleAgentSubmit}
+            onSubmit={(e: React.FormEvent) => {
+              handleAgentSubmit(e, {
+                currentTime: currentTime,
+                currentTranscriptSegments: currentTranscriptSegments,
+                isPlaying: isPlaying
+              });
+            }}
             onStop={stop}
             disabled={pendingToolConfirmation}
             status={status}

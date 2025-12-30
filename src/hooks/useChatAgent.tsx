@@ -45,6 +45,8 @@ export function useChatAgent({ sessionId }: { sessionId: string }) {
     const message = agentInput;
     setAgentInput("");
 
+    console.log(extraData);
+
     // Send message to agent
     await chat.sendMessage(
       {

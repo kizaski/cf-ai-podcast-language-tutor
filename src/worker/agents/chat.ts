@@ -16,7 +16,7 @@ import { env } from "cloudflare:workers";
 import { createWorkersAI } from "workers-ai-provider";
 
 const workersai = createWorkersAI({ binding: env.AI });
-const model = workersai("@cf/meta/llama-3.2-3b-instruct");
+const model = workersai("@cf/meta/llama-3.1-8b-instruct-fp8");
 /**
  * Chat Agent implementation that handles real-time AI chat interactions
  */
@@ -53,9 +53,8 @@ export class Chat extends AIChatAgent<Env> {
         });
 
         const result = streamText({
-          system: `You are a helpful assistant that can do various tasks... 
-
-If the user asks to schedule a task, use the schedule tool to schedule the task.
+          system: `You are a helpful assistant that should help the user learn a language.
+If the user asks for an explanation, look into the given transcript for context. Which is ...
 `,
 
           messages: convertToModelMessages(processedMessages),

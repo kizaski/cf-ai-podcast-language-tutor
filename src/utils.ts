@@ -300,3 +300,23 @@ export function base64ToArrayBuffer(base64Audio: string): ArrayBuffer {
     buffer.byteOffset + buffer.byteLength
   );
 }
+
+export function getSessionId(request: Request): string | null {
+  const cookieHeader = request.headers.get("Cookie");
+  if (!cookieHeader) return null;
+
+  // Split by semicolon to get individual pairs
+  const pairs = cookieHeader.split(";");
+
+  for (let pair of pairs) {
+    // Use a limit of 2 on split to handle '=' inside the value
+    const [name, ...valueParts] = pair.trim().split("=");
+
+    if (name === "session_id") {
+      const value = valueParts.join("="); // Rejoin in case the value had an '='
+      return value ? decodeURIComponent(value) : null;
+    }
+  }
+
+  return null;
+}

@@ -5,7 +5,8 @@
 import { tool, type ToolSet } from "ai";
 import { z } from "zod/v3";
 
-import { type Chat, type Transcriber } from "./server";
+import { type Chat } from "./worker/agents/chat";
+import { type Transcriber } from "./worker/agents/transcriber";
 import { getAgentByName, getCurrentAgent } from "agents";
 import { scheduleSchema } from "agents/schedule";
 import { env } from "cloudflare:workers";
@@ -128,7 +129,7 @@ const answerUserPrompt = tool({
       };
     } catch (error) {
       console.error(error);
-      return "Error in interruptPlaybackWithAnswer";
+      return "Error answering user's prompt";
     }
   }
 });

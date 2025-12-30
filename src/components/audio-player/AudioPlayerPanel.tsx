@@ -1,13 +1,9 @@
-import type {
-  EpisodeData,
-  TranscriptSegment,
-  Insert
-} from "@/types/audio-types";
+import type { EpisodeData } from "@/types/audio-types";
 import { EmptyAudioPlayer } from "./EmptyAudioPlayer";
 import { AudioPlayerPanelInner } from "./AudioPlayerPanelInner";
-import { useEffect, type Dispatch, type SetStateAction } from "react";
+import { type Dispatch, type SetStateAction } from "react";
 import { useAgent } from "agents/react";
-import Cookies from "js-cookie";
+import { useSession } from "@/providers/SessionProvider";
 
 export interface AudioPlayerPanelProps {
   episodeData?: EpisodeData;
@@ -20,16 +16,16 @@ export const AudioPlayerPanel = ({
 }: AudioPlayerPanelProps) => {
   if (!initialData) return <EmptyAudioPlayer />;
 
+  const { sessionId } = useSession();
+
   // TODO -- move, add buttons
   const transcriber = useAgent({
     agent: "transcriber",
-    name: Cookies.get("session_id"),
+    name: sessionId,
     query: {
       audioKey: initialData.episode.id
     },
     onMessage: (message: any) => {
-      console.log(message);
-
       setEpisodeData!((prev) => {
         if (!prev) return prev;
         return {
@@ -39,7 +35,7 @@ export const AudioPlayerPanel = ({
       });
     },
     onOpen: () => console.log("Connection established"),
-    onClose: () => console.log("Connection closed")
+    onClose: (e) => console.log("Connection closed" + JSON.stringify(e))
   });
 
   return (

@@ -4,7 +4,6 @@ import { isToolUIPart } from "ai";
 import type { UIMessage } from "@ai-sdk/react";
 import type { tools } from "../tools";
 import { useState } from "react";
-import Cookies from "js-cookie";
 
 // List of tools that require human confirmation
 // NOTE: this should match the tools that don't have execute functions in tools.ts
@@ -12,10 +11,9 @@ const toolsRequiringConfirmation: (keyof typeof tools)[] = [
   "getWeatherInformation"
 ];
 
-export function useChatAgent() {
+export function useChatAgent({ sessionId }: { sessionId: string }) {
   const [agentInput, setAgentInput] = useState("");
-  const agent = useAgent({ agent: "chat", name: Cookies.get("session_id") });
-
+  const agent = useAgent({ agent: "chat", name: sessionId! });
   const chat = useAgentChat<unknown, UIMessage<{ createdAt: string }>>({
     agent
   });

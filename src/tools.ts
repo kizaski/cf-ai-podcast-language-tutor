@@ -28,7 +28,7 @@ const getWeatherInformation = tool({
 const getLocalTime = tool({
   description: "get the local time for a specified location",
   inputSchema: z.object({ location: z.string() }),
-  execute: async ({ location }) => {
+  execute: async ({ location }: any) => {
     console.log(`Getting local time for ${location}`);
     return "10am";
   }
@@ -37,7 +37,7 @@ const getLocalTime = tool({
 const scheduleTask = tool({
   description: "A tool to schedule a task to be executed at a later time",
   inputSchema: scheduleSchema,
-  execute: async ({ when, description }) => {
+  execute: async ({ when, description }: any) => {
     // we can now read the agent context from the ALS store
     const { agent } = getCurrentAgent<Chat>();
 
@@ -97,7 +97,7 @@ const cancelScheduledTask = tool({
   inputSchema: z.object({
     taskId: z.string().describe("The ID of the task to cancel")
   }),
-  execute: async ({ taskId }) => {
+  execute: async ({ taskId }: any) => {
     const { agent } = getCurrentAgent<Chat>();
     try {
       await agent!.cancelSchedule(taskId);
@@ -133,7 +133,7 @@ const answerUserPrompt = tool({
     currentTranscriptSegments,
     isPlaying,
     word
-  }) => {
+  }: any) => {
     console.log(
       "currentTranscriptSegments received:",
       currentTranscriptSegments

@@ -91,7 +91,11 @@ export function MessageItem({
                   );
                 }
 
-                if (isToolUIPart(part) && message.role === "assistant") {
+                if (
+                  isToolUIPart(part) &&
+                  message.role === "assistant" &&
+                  part.type.replace("tool-", "") !== "undefined"
+                ) {
                   const toolCallId = part.toolCallId;
                   const toolName = part.type.replace("tool-", "");
                   const needsConfirmation =

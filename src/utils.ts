@@ -9,54 +9,31 @@ import type {
 import { convertToModelMessages, isToolUIPart } from "ai";
 import { APPROVAL } from "./shared";
 import { parseBuffer } from "music-metadata";
-import type { Phrase, TranscriptSegment, Word } from "./types/audio-types";
+import type { Phrase, Word } from "./types/audio-types";
 
-export type TranscriptKV =
-  | {
-      status: "complete";
-      segments: TranscriptSegment[];
-    }
-  | { status: "in_progress"; segments: TranscriptSegment[] }
-  | { status: "error"; message: string }
-  | { status: "pending" };
-
-export const transcriptKey = (id: string) => `transcript:${id}`;
-
-export async function getTranscriptKV(
-  env: Env,
-  id: string
-): Promise<TranscriptKV | null> {
-  const raw = await env.KV.get(transcriptKey(id));
-  if (!raw) return null;
-
-  try {
-    const parsed = JSON.parse(raw);
-
-    if (parsed && parsed.segments && Array.isArray(parsed.segments)) {
-      const validatedSegments = parsed.segments.map((seg: any) => ({
-        text: seg.text || "",
-        startTime: seg.startTime,
-        endTime: seg.endTime || "unknown"
-      }));
-
-      return {
-        ...parsed,
-        segments: validatedSegments
-      } as TranscriptKV;
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
+export interface TranscriptMetadata {
+  status: "pending" | "in_progress" | "complete" | "error";
+  message?: string;
 }
 
-export async function putTranscriptKV(
-  env: Env,
-  id: string,
-  value: TranscriptKV
-) {
-  await env.KV.put(transcriptKey(id), JSON.stringify(value));
+export function setupDatabase(sql: SqlStorage) {
+  // Create tables if they don't exist
+  sql.exec(`
+    CREATE TABLE IF NOT EXISTS transcripts (
+      audioKey TEXT PRIMARY KEY,
+      status TEXT NOT NULL,
+      message TEXT
+    );
+    CREATE TABLE IF NOT EXISTS segments (
+      id TEXT PRIMARY KEY,
+      audioKey TEXT NOT NULL,
+      text TEXT NOT NULL,
+      startTime REAL NOT NULL,
+      endTime REAL NOT NULL,
+      speaker TEXT,
+      FOREIGN KEY(audioKey) REFERENCES transcripts(audioKey)
+    );
+  `);
 }
 
 // For inserts generation, not yet used

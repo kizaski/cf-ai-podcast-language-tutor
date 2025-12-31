@@ -7,9 +7,6 @@ interface PodcastPlaybackState {
   currentTranscriptSegments: TranscriptSegment[];
   setCurrentTime: (time: number) => void;
   setIsPlaying: (playing: boolean) => void;
-  setCurrentTranscriptSegments: (
-    episodeTranscript?: TranscriptSegment[]
-  ) => void;
 }
 
 export const usePodcastPlaybackState = create<PodcastPlaybackState>((set) => ({
@@ -20,25 +17,5 @@ export const usePodcastPlaybackState = create<PodcastPlaybackState>((set) => ({
     set((state) => {
       return { currentTime: time };
     }),
-  setIsPlaying: (playing) => set({ isPlaying: playing }),
-  setCurrentTranscriptSegments: (fullTranscript) => {
-    set((state) => {
-      const time = state.currentTime;
-
-      console.log("time in zustand: ", time);
-
-      let segments: TranscriptSegment[] = [];
-
-      if (fullTranscript) {
-        const windowSec = 10;
-        segments = fullTranscript.filter(
-          (phrase) =>
-            time >= phrase.startTime - windowSec &&
-            time <= phrase.endTime + windowSec
-        );
-      }
-
-      return { currentTranscriptSegments: segments };
-    });
-  }
+  setIsPlaying: (playing) => set({ isPlaying: playing })
 }));

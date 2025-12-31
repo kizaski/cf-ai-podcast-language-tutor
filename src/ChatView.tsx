@@ -43,9 +43,6 @@ export function ChatView({
   const endRef = useAutoScroll([messages]);
   const textarea = useTextareaAutoResize();
 
-  const currentTranscriptSegments = usePodcastPlaybackState(
-    (state) => state.currentTranscriptSegments
-  );
   const currentTime = usePodcastPlaybackState((state) => state.currentTime);
   const isPlaying = usePodcastPlaybackState((state) => state.isPlaying);
 
@@ -87,7 +84,6 @@ export function ChatView({
             onSubmit={(e: React.FormEvent) => {
               handleAgentSubmit(e, {
                 currentTime: currentTime,
-                currentTranscriptSegments: currentTranscriptSegments,
                 isPlaying: isPlaying
               });
             }}

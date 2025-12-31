@@ -37,6 +37,33 @@ export class Chat extends AIChatAgent<Env> {
       ...tools
       // ...this.mcp.getAITools()
     };
+    const transcriberStub = env.Transcriber.getByName(this.name);
+
+    const lastMessageWithTime = [...this.messages]
+      .reverse()
+      .find((item) => item.metadata != null);
+
+    // TODO -- move as {...} to schema
+    const currentTime = lastMessageWithTime
+      ? (
+          lastMessageWithTime.metadata as {
+            currentTime: number;
+            isPlaying: boolean;
+          }
+        ).currentTime
+      : null;
+
+    const isPlayingPodcast = lastMessageWithTime
+      ? (
+          lastMessageWithTime.metadata as {
+            currentTime: number;
+            isPlaying: boolean;
+          }
+        ).isPlaying
+      : false;
+
+    const fullTranscript =
+      await transcriberStub.getTranscriptWindow(currentTime);
 
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
@@ -52,11 +79,55 @@ export class Chat extends AIChatAgent<Env> {
           executions
         });
 
-        const result = streamText({
-          system: `You are a helpful assistant that should help the user learn a language.
-If the user asks for an explanation, look into the given transcript for context. Which is ...
-`,
+        // const modelMessages = convertToModelMessages(processedMessages);
 
+        // const messagesWithTranscript = fullTranscript
+        //   ? [
+        //       {
+        //         role: "system" as const,
+        //         content: ""
+        //       },
+        //       ...modelMessages
+        //     ]
+        //   : modelMessages;
+
+        // messagesWithTranscript.forEach((e) => console.log(e));
+
+        console.log("is playing pod: ", isPlayingPodcast ? "true" : "false");
+        console.log(
+          isPlayingPodcast
+            ? "Respond normally"
+            : "At the end of your message, clearly urge the user to play the podcast before continuing"
+        );
+
+        const result = streamText({
+          system: `Autonomous Language Tutor
+You are an autonomous language tutor helping a learner with a foreign-language podcast.
+
+Inputs you receive:
+CURRENT_AUDIO_CONTEXT: Verbatim transcript snippets from the podcast.
+
+Instructions:
+
+Content:
+Only explain, clarify, or comment on what appears in CURRENT_AUDIO_CONTEXT.
+Do not invent content or speculate beyond the transcript.
+
+Behavior based on podcast status:
+${
+  isPlayingPodcast
+    ? "Respond normally"
+    : "At the end of your message, urge the user to play the podcast before continuing gently."
+}
+
+Interaction style:
+Be encouraging and supportive.
+Correct language issues gently, using examples from the transcript.
+Keep explanations concise but clear and don't forget to urge the user if podcast status requires it.
+
+CURRENT_AUDIO_CONTEXT:
+${fullTranscript || "No transcript available"}
+`,
           messages: convertToModelMessages(processedMessages),
           model,
           tools: allTools,
@@ -71,6 +142,8 @@ If the user asks for an explanation, look into the given transcript for context.
         writer.merge(result.toUIMessageStream());
       }
     });
+
+    this.messages.forEach((e) => console.log(e));
 
     return createUIMessageStreamResponse({ stream });
   }

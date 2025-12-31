@@ -1,5 +1,5 @@
 import type { TranscriptSegment, Word, Phrase } from "@/types/audio-types";
-import { getTranscriptKV, putTranscriptKV, extractPhrases } from "@/utils";
+import { extractPhrases, setupDatabase } from "@/utils";
 import {
   Agent,
   type Connection,
@@ -13,76 +13,148 @@ interface TranscriberState {
 }
 
 export class Transcriber extends Agent<Env, TranscriberState> {
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    // Initialize schema on startup
+    setupDatabase(this.ctx.storage.sql);
+  }
+
   async onRequest(request: Request): Promise<Response> {
     return new Response("Method not allowed", { status: 405 });
   }
 
   async runTranscriptionTask(connection: Connection, audioKey: string) {
-    const cached = await getTranscriptKV(env, audioKey);
+    const db = this.ctx.storage.sql;
 
+    // 1. Check current status
+    let transcript;
     try {
-      if (cached?.status === "complete") {
-        // Send cached segments
-        for (const segment of cached.segments) {
-          connection.send(JSON.stringify(segment));
-        }
-      } else {
-        let accumulated: TranscriptSegment[] =
-          cached?.status === "in_progress" ? cached.segments : [];
+      transcript = db
+        .exec("SELECT status FROM transcripts WHERE audioKey = ?", audioKey)
+        .one() as { status: string } | undefined;
+    } catch (error) {
+      console.log(error);
+    }
 
-        try {
-          await putTranscriptKV(env, audioKey, {
-            status: "in_progress",
-            segments: accumulated
-          });
+    if (transcript?.status === "complete") {
+      const segments = db
+        .exec(
+          "SELECT text, startTime, endTime, id, speaker FROM segments WHERE audioKey = ? ORDER BY startTime ASC",
+          audioKey
+        )
+        .toArray();
 
-          for await (const whisper_output of this.transcribe(audioKey)) {
-            const words = whisper_output.words ?? [];
-            if (!words.length) continue;
-
-            const phrases = extractPhrases(words as Word[]);
-            for (const phrase of phrases) {
-              const segment: TranscriptSegment = {
-                text: phrase.text,
-                startTime: phrase.start,
-                endTime: phrase.end,
-                id: phrase.id,
-                speaker: ""
-              };
-
-              connection.send(JSON.stringify(segment));
-              accumulated.push(segment);
-            }
-
-            await putTranscriptKV(env, audioKey, {
-              status: "in_progress",
-              segments: accumulated
-            });
-          }
-
-          await putTranscriptKV(env, audioKey, {
-            status: "complete",
-            segments: accumulated
-          });
-        } catch (err: any) {
-          await putTranscriptKV(env, audioKey, {
-            status: "error",
-            message: err.message ?? "transcription failed"
-          });
-          connection.send(
-            JSON.stringify({
-              error: `[Error during transcription: ${err.message}]`
-            })
-          );
-        } finally {
-        }
+      for (const segment of segments) {
+        connection.send(JSON.stringify(segment));
       }
-    } catch (error: any) {
-      console.error(error);
-      connection.close(1008, error);
       return;
     }
+
+    try {
+      // 2. Initialize or Update status to in_progress
+      db.exec(
+        "INSERT INTO transcripts (audioKey, status) VALUES (?, 'in_progress') ON CONFLICT(audioKey) DO UPDATE SET status='in_progress'",
+        audioKey
+      );
+
+      for await (const whisper_output of this.transcribe(audioKey)) {
+        const words = whisper_output.words ?? [];
+        if (!words.length) continue;
+
+        const phrases = extractPhrases(words as Word[]);
+
+        // Use a transaction for batch inserting segments
+        for (const phrase of phrases) {
+          const segment: TranscriptSegment = {
+            text: phrase.text,
+            startTime: phrase.start,
+            endTime: phrase.end,
+            id: phrase.id,
+            speaker: ""
+          };
+
+          db.exec(
+            "INSERT INTO segments (id, audioKey, text, startTime, endTime, speaker) VALUES (?, ?, ?, ?, ?, ?)",
+            segment.id + crypto.randomUUID(),
+            audioKey,
+            segment.text,
+            segment.startTime,
+            segment.endTime,
+            segment.speaker
+          );
+
+          connection.send(JSON.stringify(segment));
+        }
+      }
+
+      db.exec(
+        "UPDATE transcripts SET status = 'complete' WHERE audioKey = ?",
+        audioKey
+      );
+    } catch (err: any) {
+      console.error(err);
+      db.exec(
+        "UPDATE transcripts SET status = 'error', message = ? WHERE audioKey = ?",
+        err.message ?? "failed",
+        audioKey
+      );
+      connection.send(JSON.stringify({ error: `[Error: ${err.message}]` }));
+    }
   }
+
+  /**
+   * Public RPC method that other Agents can call
+   */
+  async getFullTranscript(): Promise<string> {
+    const audioKey = this.state.audioKey;
+    if (!audioKey) return "No transcript available.";
+
+    const segments = this.ctx.storage.sql
+      .exec(
+        "SELECT text FROM segments WHERE audioKey = ? ORDER BY startTime ASC",
+        audioKey
+      )
+      .toArray() as { text: string }[];
+
+    return segments.map((s) => s.text).join(" ");
+  }
+
+  /**
+   * Fetches transcript segments within a window relative to targetTime
+   */
+  async getTranscriptWindow(
+    targetTime: number | null,
+    windowSeconds: number = 10
+  ): Promise<string | null> {
+    const audioKey = this.state.audioKey;
+    if (!audioKey) return null;
+
+    if (!targetTime) return null;
+
+    const start = targetTime - windowSeconds;
+    const end = targetTime + windowSeconds;
+
+    // Fetch segments that overlap with our [start, end] window
+    const segments = this.ctx.storage.sql
+      .exec(
+        `SELECT text, startTime FROM segments 
+         WHERE audioKey = ? 
+         AND endTime >= ? 
+         AND startTime <= ? 
+         ORDER BY startTime ASC`,
+        audioKey,
+        start,
+        end
+      )
+      .toArray() as { text: string; startTime: number }[];
+
+    if (segments.length === 0) return null;
+
+    return segments
+      .map((s) => `[${s.startTime.toFixed(1)}s]: ${s.text}`)
+      .join("\n");
+  }
+
   async onConnect(connection: Connection, ctx: ConnectionContext) {
     try {
       // The query parameters from useAgent should be in the connection URL
@@ -122,7 +194,7 @@ export class Transcriber extends Agent<Env, TranscriberState> {
       );
 
       // Start transcription process with the audioKey
-      await this.runTranscriptionTask(connection, audioKey);
+      this.ctx.waitUntil(this.runTranscriptionTask(connection, audioKey));
     } catch (error: any) {
       console.error("Error in onConnect:", error);
 

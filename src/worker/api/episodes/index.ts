@@ -4,13 +4,7 @@ import type {
   Episode,
   EpisodeData
 } from "@/types/audio-types";
-import {
-  base64ToArrayBuffer,
-  getAudioDuration,
-  type TranscriptKV,
-  getTranscriptKV,
-  sendEvent
-} from "@/utils";
+import { base64ToArrayBuffer, getAudioDuration } from "@/utils";
 
 export function chunkTranscript(
   segments: TranscriptSegment[],
@@ -143,29 +137,30 @@ If no insert is needed, return an empty JSON array.
   return inserts;
 }
 
-export async function waitForTranscript(
-  env: Env,
-  episodeId: string,
-  timeoutMs = 90_000
-): Promise<TranscriptKV> {
-  const start = Date.now();
+// TODO -- Rewrite
+// export async function waitForTranscript(
+//   env: Env,
+//   episodeId: string,
+//   timeoutMs = 90_000
+// ): Promise<TranscriptKV> {
+//   const start = Date.now();
 
-  while (Date.now() - start < timeoutMs) {
-    const transcript = await getTranscriptKV(env, episodeId);
+//   while (Date.now() - start < timeoutMs) {
+//     const transcript = await getTranscriptKV(env, episodeId);
 
-    if (transcript?.status === "complete") {
-      return transcript;
-    }
+//     if (transcript?.status === "complete") {
+//       return transcript;
+//     }
 
-    if (transcript?.status === "error") {
-      throw new Error("Transcript failed");
-    }
+//     if (transcript?.status === "error") {
+//       throw new Error("Transcript failed");
+//     }
 
-    await new Promise((r) => setTimeout(r, 2000));
-  }
+//     await new Promise((r) => setTimeout(r, 2000));
+//   }
 
-  throw new Error("Transcript timeout");
-}
+//   throw new Error("Transcript timeout");
+// }
 
 export async function handleAudioQuery(
   request: Request,
@@ -290,67 +285,67 @@ export async function handleAudioUpload(
   }
 }
 
-// TODO -- put inside agent
-export async function handleInsertsStream(
-  request: Request,
-  env: Env,
-  episodeId: string
-): Promise<Response> {
-  return new Response("Inserts stream temporarily off", { status: 405 });
-  const stream = new TransformStream();
-  const writer = stream.writable.getWriter();
-  const encoder = new TextEncoder();
+// TODO -- Rewrite
+// export async function handleInsertsStream(
+//   request: Request,
+//   env: Env,
+//   episodeId: string
+// ): Promise<Response> {
+//   return new Response("Inserts stream temporarily off", { status: 405 });
+//   const stream = new TransformStream();
+//   const writer = stream.writable.getWriter();
+//   const encoder = new TextEncoder();
 
-  (async () => {
-    try {
-      const transcript = await waitForTranscript(env, episodeId);
+//   (async () => {
+//     try {
+//       const transcript = await waitForTranscript(env, episodeId);
 
-      if (transcript.status !== "complete") {
-        throw new Error("Transcript not complete");
-      }
+//       if (transcript.status !== "complete") {
+//         throw new Error("Transcript not complete");
+//       }
 
-      const chunks = chunkTranscript(
-        transcript.segments,
-        60, // seconds per chunk
-        5 // overlap
-      );
+//       const chunks = chunkTranscript(
+//         transcript.segments,
+//         60, // seconds per chunk
+//         5 // overlap
+//       );
 
-      const allInserts: Insert[] = [];
+//       const allInserts: Insert[] = [];
 
-      for (const chunk of chunks) {
-        const inserts = await generateInsertsForChunk(env, episodeId, chunk);
+//       for (const chunk of chunks) {
+//         const inserts = await generateInsertsForChunk(env, episodeId, chunk);
 
-        for (const insert of inserts) {
-          allInserts.push(insert);
-          await sendEvent(insert, writer, encoder);
-        }
-      }
+//         for (const insert of inserts) {
+//           allInserts.push(insert);
+//           await sendEvent(insert, writer, encoder);
+//         }
+//       }
 
-      await env.KV.put(`inserts:${episodeId}`, JSON.stringify(allInserts));
+//       await env.KV.put(`inserts:${episodeId}`, JSON.stringify(allInserts));
 
-      await sendEvent({ type: "complete" }, writer, encoder);
-    } catch (err: any) {
-      console.error("Insert stream failed", err);
-      await sendEvent(
-        {
-          type: "error",
-          message: err.message || "Insert generation failed"
-        },
-        writer,
-        encoder
-      );
-    } finally {
-      await writer.close();
-    }
-  })().catch((err) => {
-    console.error(err);
-  });
+//       await sendEvent({ type: "complete" }, writer, encoder);
+//     } catch (err: any) {
+//       console.error("Insert stream failed", err);
+//       await sendEvent(
+//         {
+//           type: "error",
+//           message: err.message || "Insert generation failed"
+//         },
+//         writer,
+//         encoder
+//       );
+//     } finally {
+//       await writer.close();
+//     }
+//   })().catch((err) => {
+//     console.error(err);
+//   });
 
-  return new Response(stream.readable, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive"
-    }
-  });
-}
+//   return new Response(stream.readable, {
+//     headers: {
+//       "Content-Type": "text/event-stream",
+//       "Cache-Control": "no-cache",
+//       Connection: "keep-alive"
+//     }
+//   });
+// }

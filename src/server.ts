@@ -2,8 +2,8 @@ import { routeAgentRequest } from "agents";
 import { getSessionId } from "./utils";
 import {
   handleAudioUpload,
-  handleAudioQuery,
-  handleInsertsStream
+  handleAudioQuery
+  // handleInsertsStream
 } from "./worker/api/episodes";
 import { handleR2Query } from "./worker/api/r2";
 import { Chat } from "./worker/agents/chat";
@@ -63,7 +63,8 @@ export default {
         parts[4] === "inserts-stream"
       ) {
         const episodeId = parts[3];
-        return handleInsertsStream(request, env, episodeId);
+        return new Response("Unimplemented", { status: 405 });
+        // return handleInsertsStream(request, env, episodeId);
       }
     }
 

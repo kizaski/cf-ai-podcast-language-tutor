@@ -7,15 +7,15 @@ import { useState } from "react";
 
 // List of tools that require human confirmation
 // NOTE: this should match the tools that don't have execute functions in tools.ts
-const toolsRequiringConfirmation: (keyof typeof tools)[] = [
-  "getWeatherInformation"
-];
+const toolsRequiringConfirmation: (keyof typeof tools)[] = [];
 
 export function useChatAgent({ sessionId }: { sessionId: string }) {
   const [agentInput, setAgentInput] = useState("");
   const agent = useAgent({ agent: "chat", name: sessionId! });
-  const chat = useAgentChat<unknown, UIMessage<{ createdAt: string }>>({
-    agent
+  // TODO -- define schema for extraData in UIMessage<any>
+  const chat = useAgentChat<unknown, UIMessage<any>>({
+    agent,
+    resume: false
   });
 
   const pendingToolConfirmation = chat.messages.some((m) =>
@@ -48,15 +48,11 @@ export function useChatAgent({ sessionId }: { sessionId: string }) {
     console.log(extraData);
 
     // Send message to agent
-    await chat.sendMessage(
-      {
-        role: "user",
-        parts: [{ type: "text", text: message }]
-      },
-      {
-        body: extraData
-      }
-    );
+    await chat.sendMessage({
+      role: "user",
+      parts: [{ type: "text", text: message }],
+      metadata: extraData
+    });
   };
 
   return {

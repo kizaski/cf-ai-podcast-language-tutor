@@ -4,7 +4,6 @@ import { AudioPlayerPanelInner } from "./AudioPlayerPanelInner";
 import { type Dispatch, type SetStateAction } from "react";
 import { useAgent } from "agents/react";
 import { useSession } from "@/providers/SessionProvider";
-import { usePodcastPlaybackState } from "@/stores/usePlaybackstate";
 
 export interface AudioPlayerPanelProps {
   episodeData?: EpisodeData;
@@ -19,10 +18,6 @@ export const AudioPlayerPanel = ({
 
   const { sessionId } = useSession();
 
-  const setCurrentTranscriptSegments = usePodcastPlaybackState(
-    (state) => state.setCurrentTranscriptSegments
-  );
-
   useAgent({
     agent: "transcriber",
     name: sessionId,
@@ -32,10 +27,6 @@ export const AudioPlayerPanel = ({
     onMessage: (message: any) => {
       setEpisodeData!((prev) => {
         if (!prev) return prev;
-        setCurrentTranscriptSegments([
-          ...prev.transcript,
-          JSON.parse(message.data)
-        ]);
         return {
           ...prev,
           transcript: [...prev.transcript, JSON.parse(message.data)]

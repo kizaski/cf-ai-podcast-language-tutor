@@ -8,7 +8,6 @@ import { z } from "zod/v3";
 import { type Chat } from "./worker/agents/chat";
 import { getCurrentAgent } from "agents";
 import { scheduleSchema } from "agents/schedule";
-import { TranscriptSegmentSchema } from "./types/audio-types";
 
 /**
  * Weather information tool that requires human confirmation
@@ -109,58 +108,20 @@ const cancelScheduledTask = tool({
   }
 });
 
-const answerUserPrompt = tool({
-  description: "Answer questions about current and nearby podcast content",
-  inputSchema: z.object({
-    prompt: z.string().describe("User's question about the podcast"),
-    word: z.string().describe("The word the user is asking about"),
-    currentTime: z
-      .number()
-      .describe("Current playback time in seconds")
-      .optional(),
-    currentTranscriptSegments: z
-      .array(TranscriptSegmentSchema)
-      .describe("Transcript segments currently playing")
-      .optional(),
-    isPlaying: z
-      .boolean()
-      .describe("Whether the podcast is currently playing")
-      .optional()
-  }),
-  execute: async ({
-    prompt,
-    currentTime,
-    currentTranscriptSegments,
-    isPlaying,
-    word
-  }: any) => {
-    console.log(
-      "currentTranscriptSegments received:",
-      currentTranscriptSegments
-    );
-    return {
-      success: true,
-      answerContext: `At ${currentTime?.toFixed(1) ?? 0}`,
-      currentTime,
-      segmentCount: currentTranscriptSegments?.length ?? 0,
-      currentTranscriptSegments: currentTranscriptSegments,
-      prompt,
-      isPlaying
-    };
-  }
-});
+// TODO -- add Podwise tool
+// TODO -- add tool for getting podcast from url (spotify or direct)
 
 /**
  * Export all available tools
  * These will be provided to the AI model to describe available capabilities
  */
 export const tools = {
-  getWeatherInformation,
-  getLocalTime,
-  scheduleTask,
-  getScheduledTasks,
-  cancelScheduledTask,
-  answerUserPrompt
+  // getWeatherInformation,
+  // getLocalTime,
+  // scheduleTask,
+  // getScheduledTasks,
+  // cancelScheduledTask
+  // answerUserPrompt
 } satisfies ToolSet;
 
 /**

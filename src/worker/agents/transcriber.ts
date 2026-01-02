@@ -63,21 +63,43 @@ export class Transcriber extends Agent<Env, TranscriberState> {
     }
 
     if (transcript?.status === "complete") {
-      let segmentRows: TranscriptSegment[] = [];
+      let segments: TranscriptSegment[] = [];
       try {
-        segmentRows = this
+        segments = this
           .sql<TranscriptSegment>`SELECT text, startTime, endTime, id, speaker FROM segments WHERE audioKey = ${audioKey} ORDER BY startTime ASC`;
       } catch (error) {
         console.log(error);
       }
 
-      rows.push(...segmentRows);
-
-      for (const segment of segmentRows) {
+      for (const segment of segments) {
         connection.send(
           JSON.stringify({ type: "transcript", transcript: segment })
         );
       }
+
+      const chunks = this.chunkTranscript(segments);
+
+      let hasCached = false;
+
+      for (const chunk of chunks) {
+        const cached = this.getCachedInserts(audioKey, chunk);
+        if (cached.length) {
+          hasCached = true;
+          for (const insert of cached) {
+            connection.send(JSON.stringify({ type: "insert", insert }));
+          }
+        }
+      }
+
+      if (!hasCached) {
+        for (const chunk of chunks) {
+          const inserts = await this.generateInsertsForChunk(audioKey, chunk);
+          for (const insert of inserts) {
+            connection.send(JSON.stringify({ type: "insert", insert }));
+          }
+        }
+      }
+
       return;
     }
 
@@ -239,11 +261,29 @@ export class Transcriber extends Agent<Env, TranscriberState> {
       .join("\n");
   }
 
+  private getCachedInserts(audioKey: string, chunk: TranscriptSegment) {
+    const cachedInserts = this.sql<Insert>`SELECT * FROM inserts 
+       WHERE audioKey = ${audioKey}
+       AND startTime = ${chunk.startTime} 
+       AND endTime = ${chunk.endTime}`;
+    return cachedInserts ?? [];
+  }
+
   private async generateInsertsForChunk(
     audioKey: string,
     chunk: TranscriptSegment
   ): Promise<Insert[]> {
-    // 1️⃣ Ask LLM to generate exactly one intro and one outro for this chunk
+    const cachedInserts = this.getCachedInserts(audioKey, chunk);
+    if (cachedInserts.length > 0) {
+      console.log(
+        `Using cached inserts for chunk ${chunk.startTime}-${chunk.endTime}`
+      );
+      console.log(cachedInserts[0]);
+
+      return cachedInserts;
+    }
+
+    // TODO -- let agent decide where to place the insert in the audio
     const plan = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
       messages: [
         {
@@ -282,15 +322,16 @@ Constraints:
             type: "object",
             properties: {
               type: { type: "string" },
-              atTime: { type: "number" },
               title: { type: "string" },
               content: { type: "string" }
             },
-            required: ["type", "atTime", "title", "content"]
+            required: ["type", "title", "content"]
           }
         }
       }
     });
+
+    console.log("inserts gen llm resp:", plan);
 
     if (!Array.isArray(plan.response) || !plan.response.length) return [];
 
@@ -299,26 +340,43 @@ Constraints:
     for (const item of plan.response) {
       if (!item.content) continue;
 
-      // 2️⃣ Generate TTS for the insert
       const { audio }: any = await env.AI.run("@cf/myshell-ai/melotts", {
         prompt: item.content,
         lang: "en"
       });
       const audioKeyInsert = `${audioKey}-${crypto.randomUUID()}.mp3`;
       await env.R2_AUDIO_BUCKET.put(audioKeyInsert, base64ToArrayBuffer(audio));
-      const duration = await getAudioDuration(audio);
+      const audioBuffer = base64ToArrayBuffer(audio);
+      const duration = await getAudioDuration(audioBuffer, "audio/wav");
 
-      inserts.push({
+      console.log("INSERT AUDIO DURATION:", duration, {
+        start: item.type === "intro" ? chunk.startTime : chunk.endTime,
+        type: item.type
+      });
+
+      const insert = {
         id: crypto.randomUUID(),
         type: item.type,
         title: item.title,
-        startTime: item.atTime,
-        endTime: item.atTime + duration,
+        startTime: item.type === "intro" ? chunk.startTime : chunk.endTime,
+        endTime: chunk.endTime + duration,
         duration,
+        text: item.content,
         audioUrl: audioKeyInsert,
         enabled: true,
-        metadata: { chunkStart: chunk.startTime, chunkEnd: chunk.endTime }
-      });
+        metadata: {}
+      };
+
+      inserts.push(insert);
+
+      // Save to DB for caching
+      try {
+        this
+          .sql`INSERT INTO inserts (id, audioKey, startTime, endTime, type, title, text, audioUrl, duration, enabled)
+         VALUES (${insert.id}, ${audioKey}, ${insert.startTime}, ${insert.endTime}, ${insert.type}, ${insert.title}, ${item.content}, ${insert.audioUrl}, ${insert.duration}, ${1})`;
+      } catch (error) {
+        console.error(error);
+      }
     }
 
     return inserts;

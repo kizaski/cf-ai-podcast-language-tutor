@@ -11,11 +11,6 @@ import { APPROVAL } from "./shared";
 import { parseBuffer } from "music-metadata";
 import type { Phrase, Word } from "./types/audio-types";
 
-export interface TranscriptMetadata {
-  status: "pending" | "in_progress" | "complete" | "error";
-  message?: string;
-}
-
 export function setupDatabase(sql: SqlStorage) {
   // Create tables if they don't exist
   sql.exec(`
@@ -33,6 +28,21 @@ export function setupDatabase(sql: SqlStorage) {
       speaker TEXT,
       FOREIGN KEY(audioKey) REFERENCES transcripts(audioKey)
     );
+    CREATE TABLE IF NOT EXISTS inserts (
+      id TEXT PRIMARY KEY,
+      audioKey TEXT NOT NULL,
+      type TEXT NOT NULL, -- "primer_intro" | "primer_outro" | "ad" | "transition"
+      title TEXT NOT NULL,
+      startTime REAL NOT NULL,
+      endTime REAL NOT NULL,
+      duration REAL NOT NULL,
+      audioUrl TEXT NOT NULL,
+      text TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1, -- boolean
+      metadata TEXT, -- JSON string
+      createdAt REAL DEFAULT (unixepoch())
+    );
+    CREATE INDEX IF NOT EXISTS idx_inserts_audioKey ON inserts(audioKey);
   `);
 }
 
@@ -42,9 +52,13 @@ const MIN_MINUTES = 9;
 export const MIN_WORDS = WORDS_PER_MINUTE * MIN_MINUTES;
 
 export async function getAudioDuration(
-  arrayBuffer: ArrayBuffer
+  arrayBuffer: ArrayBuffer,
+  mime?: string
 ): Promise<number> {
-  const metadata = await parseBuffer(Buffer.from(arrayBuffer), "audio/mpeg");
+  const metadata = await parseBuffer(
+    Buffer.from(arrayBuffer),
+    mime || "audio/mpeg"
+  );
   return metadata.format.duration || 0;
 }
 

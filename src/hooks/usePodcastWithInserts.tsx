@@ -34,6 +34,7 @@ export function usePodcastWithInserts(
   const insertIndexRef = useRef(0);
   const monitorRef = useRef<number | null>(null);
   const pausedSeekRef = useRef(0);
+  const insertPlayingRef = useRef(false);
 
   const podcastObjectUrlRef = useRef<string | null>(null);
 
@@ -118,6 +119,7 @@ export function usePodcastWithInserts(
     stopMonitoring();
     podcastRef.current?.stop();
     insertRef.current?.stop();
+    insertPlayingRef.current = false;
   }, []);
 
   const seek = useCallback((time: number) => {
@@ -152,11 +154,11 @@ export function usePodcastWithInserts(
       }
       if (!next) return;
 
-      if (t >= next.startTime) {
+      if (t >= next.startTime && !insertPlayingRef.current) {
         playInsert(next);
         insertIndexRef.current++;
       }
-    }, 200);
+    }, 110);
   };
 
   const stopMonitoring = () => {
@@ -188,8 +190,13 @@ export function usePodcastWithInserts(
       html5: true,
       onend: () => {
         URL.revokeObjectURL(objectUrl);
+
+        insertPlayingRef.current = false; // mark insert as finished
         podcast.seek(pausedSeekRef.current, id);
         podcast.play(id);
+      },
+      onplay: () => {
+        insertPlayingRef.current = true; // mark insert as playing
       }
     });
 
@@ -212,6 +219,7 @@ export function usePodcastWithInserts(
     podcastRef.current = null;
     insertRef.current = null;
     podcastIdRef.current = null;
+    insertPlayingRef.current = false;
   };
 
   useEffect(() => cleanup, []);

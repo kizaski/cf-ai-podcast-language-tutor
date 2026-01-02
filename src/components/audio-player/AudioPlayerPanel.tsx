@@ -38,8 +38,8 @@ export const AudioPlayerPanel = ({
         return prev;
       });
     },
-    onOpen: () => console.log("WS connected"),
-    onClose: () => console.log("WS closed")
+    onOpen: () => console.log("WS connected [transcriber]"),
+    onClose: () => console.log("WS closed [transcriber]")
   });
 
   return (

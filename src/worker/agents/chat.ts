@@ -65,6 +65,8 @@ export class Chat extends AIChatAgent<Env> {
     const fullTranscript =
       await transcriberStub.getTranscriptWindowText(currentTime);
 
+    console.log(fullTranscript);
+
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
         // Clean up incomplete tool calls to prevent API errors
@@ -78,27 +80,6 @@ export class Chat extends AIChatAgent<Env> {
           tools: allTools,
           executions
         });
-
-        // const modelMessages = convertToModelMessages(processedMessages);
-
-        // const messagesWithTranscript = fullTranscript
-        //   ? [
-        //       {
-        //         role: "system" as const,
-        //         content: ""
-        //       },
-        //       ...modelMessages
-        //     ]
-        //   : modelMessages;
-
-        // messagesWithTranscript.forEach((e) => console.log(e));
-
-        console.log("is playing pod: ", isPlayingPodcast ? "true" : "false");
-        console.log(
-          isPlayingPodcast
-            ? "Respond normally"
-            : "At the end of your message, clearly urge the user to play the podcast before continuing"
-        );
 
         const result = streamText({
           system: `Autonomous Language Tutor
@@ -142,8 +123,6 @@ ${fullTranscript || "No transcript available"}
         writer.merge(result.toUIMessageStream());
       }
     });
-
-    this.messages.forEach((e) => console.log(e));
 
     return createUIMessageStreamResponse({ stream });
   }

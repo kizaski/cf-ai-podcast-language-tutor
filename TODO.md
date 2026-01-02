@@ -33,3 +33,4 @@
 - Add automatic prompt write + send by clicking a word (or hover, button explain appears)
 - Add tool or similar for getting the whole podcast transcript and asking a question on it (Summarize the whole podcast -> tool call)
 - Reset useEpisode on navigate
+- Add rewind to word agentically initiated if many messages are sent (increase learner profile's level) 

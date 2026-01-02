@@ -39,3 +39,5 @@
 - Reset useEpisode on navigate
 - Add rewind to word agentically initiated if many messages are sent (increase learner profile's level) 
 - Add option to blur the transcript - let the LLM control this setting if needed or chosen 
+- Add option how to generate inserts: option A: check box to generate the inserts faster but with static windows of time
+, option B: generate them based on full or bigger window of the transcript 

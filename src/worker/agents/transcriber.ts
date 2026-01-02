@@ -12,10 +12,13 @@ import {
 } from "@/utils";
 import { Agent, type Connection, type ConnectionContext } from "agents";
 import { env } from "cloudflare:workers";
+import { parseBuffer } from "music-metadata";
 
 interface TranscriberState {
   audioKey: string;
 }
+
+// TODO -- resume (inserts and transcript generation)
 
 // TODO -- rename
 export class Transcriber extends Agent<Env, TranscriberState> {
@@ -109,6 +112,7 @@ export class Transcriber extends Agent<Env, TranscriberState> {
     let currentWordCount = 0;
 
     for await (const result of this.transcribe(audioKey)) {
+      if (!result) return;
       console.log("Transcription chunk received:", result.text?.slice(0, 50));
       const phrases = extractPhrases(result.words as Word[]);
 
@@ -347,7 +351,7 @@ For this 60-second transcript segment, generate exactly TWO inserts:
    - 2-3 sentences max
    - Summarize or explain the key content of this chunk for a language learner
 2. Outro (after the podcast audio):
-   - 1-2 sentences max
+   - 2-3 sentences max
    - Recap the main takeaway from this chunk
 
 Constraints:
@@ -440,7 +444,7 @@ Constraints:
    */
   async *transcribe(
     audioKey: string
-  ): AsyncGenerator<Ai_Cf_Openai_Whisper_Output> {
+  ): AsyncGenerator<Ai_Cf_Openai_Whisper_Output | undefined> {
     const chunks = await this.getAudioChunks(audioKey);
 
     let accumulatedSegments: Phrase[] = [];
@@ -453,7 +457,7 @@ Constraints:
       let lastWordTimestamp = 0;
       const result = await this.transcribeChunk(chunk);
 
-      if (result.words?.length) {
+      if (result && result.words?.length) {
         const normalizedWords = result.words
           .filter(
             (w): w is Word =>
@@ -472,7 +476,7 @@ Constraints:
         accumulatedSegments.push(...phrases);
       }
 
-      yield result;
+      yield result ?? undefined;
       timeOffset = lastWordTimestamp;
     }
   }
@@ -494,7 +498,7 @@ Constraints:
 
   async transcribeChunk(
     chunkBuffer: ArrayBuffer
-  ): Promise<Ai_Cf_Openai_Whisper_Output> {
+  ): Promise<Ai_Cf_Openai_Whisper_Output | undefined> {
     console.log(
       "Transcribing raw audio chunk of size:",
       chunkBuffer.byteLength
@@ -506,9 +510,15 @@ Constraints:
       return { text: "[Empty chunk]" };
     }
 
-    return await env.AI.run("@cf/openai/whisper", {
-      audio: byteArray,
-      task: "transcribe"
-    });
+    try {
+      // console.log(await parseBuffer(new Uint8Array(chunkBuffer)));
+      return await env.AI.run("@cf/openai/whisper", {
+        audio: byteArray,
+        task: "transcribe"
+      });
+    } catch (error) {
+      console.error(error);
+      // TODO -- send error
+    }
   }
 }

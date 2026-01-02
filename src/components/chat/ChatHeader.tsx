@@ -30,7 +30,7 @@ export function ChatHeader({
       </div>
 
       <div className="flex-1">
-        <h2 className="font-semibold text-base">AI Chat Agent</h2>
+        <h2 className="font-semibold text-base">Podcast Tutor</h2>
       </div>
 
       <div className="flex items-center gap-2 mr-2">

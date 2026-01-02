@@ -15,14 +15,14 @@ export function EmptyState({ audioFile }: any) {
   } = useEpisode();
 
   return (
-    <div className="h-full flex items-center justify-center">
+    <div className="h-full w-full flex items-center justify-center">
       <Card className="p-6 max-w-md mx-auto bg-neutral-100 dark:bg-neutral-900">
         <div className="text-center space-y-4">
           <div className="bg-[#F48120]/10 text-[#F48120] rounded-full p-3 inline-flex">
             <Robot size={24} />
           </div>
 
-          <h3 className="font-semibold text-lg">Welcome to AI Chat</h3>
+          <h3 className="font-semibold text-lg">Welcome to Podcast Tutor</h3>
 
           {/* TODO -- instructions */}
 
@@ -42,7 +42,7 @@ export function EmptyState({ audioFile }: any) {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="text-sm"
+            className="text-sm p-2 outline outline-amber-600 cursor-pointer rounded-lg"
           >
             📎 Browse
           </button>

@@ -77,14 +77,15 @@ export const AudioPlayerPanelInner = ({
 
   const handleToggleInserts = () => {
     setEpisodeData((prev) => {
-      if (!prev) {
-        return null;
-      }
+      if (!prev) return null;
+
+      const anyEnabled = prev.inserts.some((i) => i.enabled);
+
       return {
         ...prev,
         inserts: prev.inserts.map((i) => ({
           ...i,
-          enabled: !i.enabled
+          enabled: !anyEnabled // toggle all based on current state
         }))
       };
     });

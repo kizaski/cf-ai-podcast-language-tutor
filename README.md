@@ -55,16 +55,21 @@ npm start
 npm run deploy
 ```
 
+## Notes
+
+- If whisper fails, run this ffmpeg command `ffmpeg -i input.mp3 -vn -sn -dn -map_metadata -1 -c:a copy out.mp3` on the audio to enusre whisper reads it properly. 
+
+## Use cases
+
+- You want to evaluate if you will enjoy a foreign language podcast.
+
+- Read the transcript of a podcast and ask questions about the last few dozen seconds of it.
+
+- Learn a langauge by listening a podcast more effortlessly.
+
 ## Project Structure
 
-```
-├── src/
-│   ├── app.tsx        # Chat UI implementation
-│   ├── server.ts      # Chat agent logic
-│   ├── tools.ts       # Tool definitions
-│   ├── utils.ts       # Helper functions
-│   └── styles.css     # UI styling
-```
+`TODO`
 
 ## Customization Guide
 

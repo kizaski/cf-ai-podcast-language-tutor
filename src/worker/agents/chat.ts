@@ -62,8 +62,10 @@ export class Chat extends AIChatAgent<Env> {
         ).isPlaying
       : false;
 
-    const fullTranscript =
-      await transcriberStub.getTranscriptWindowText(currentTime);
+    const fullTranscript = await transcriberStub.getTranscriptWindowText(
+      currentTime,
+      60
+    );
 
     console.log(fullTranscript);
 
@@ -80,6 +82,14 @@ export class Chat extends AIChatAgent<Env> {
           tools: allTools,
           executions
         });
+
+        // TODO -- enhance prompt conditionally with ((WITH TOOLS (?)))
+        // PROMPT extension in [content]:
+        // If the user NOT writing to you in English, at the end of your clarification
+        // and/or explanation you should fix his or her grammatical or vocabulary mistakes,
+        // tell them what they are and suggest a better rephrase.
+        //
+        // Try to make the response not too long
 
         const result = streamText({
           system: `Autonomous Language Tutor

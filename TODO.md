@@ -9,6 +9,8 @@
 - Remove emptystate card when in /episodes view
 - Rename /episodes to /episode
 - Fix inserts caching
+- Move runPipeline in Transciber from onConnect to method, call it conditionally
+- In Transcriber onClose - stop all jobs
 
 ## TODO -- enhance
 

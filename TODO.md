@@ -11,6 +11,7 @@
 
 ## TODO -- enhance
 
+- IMPORTANT: Add loading indicator for inserts and transcript generation (connection.send type: transcript-status)
 - Customize UI
 - Add prompt suggestions in /episodes
 - Add anonymous user session recovery (in empty state) in UI 

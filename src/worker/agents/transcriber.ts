@@ -178,6 +178,9 @@ export class Transcriber extends Agent<Env, TranscriberState> {
           connection.send(JSON.stringify({ type: "insert", insert }));
         });
       })
+      .catch((e) =>
+        console.error("Background insert task finished with error:", e)
+      )
       .finally(() => {
         console.log("Background insert task complete for chunk:", chunk.id);
         this.activeInsertTasks.delete(task);

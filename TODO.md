@@ -8,6 +8,7 @@
 - IMPORTANT: newly enabled (during playback) Inserts dont play (no matter where in playback)
 - Remove emptystate card when in /episodes view
 - Rename /episodes to /episode
+- Fix inserts caching
 
 ## TODO -- enhance
 

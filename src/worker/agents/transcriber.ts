@@ -1,17 +1,23 @@
-import type { TranscriptSegment, Word, Phrase } from "@/types/audio-types";
-import { extractPhrases, setupDatabase } from "@/utils";
+import type {
+  TranscriptSegment,
+  Word,
+  Phrase,
+  Insert
+} from "@/types/audio-types";
 import {
-  Agent,
-  type Connection,
-  type ConnectionContext,
-  type WSMessage
-} from "agents";
+  extractPhrases,
+  setupDatabase,
+  base64ToArrayBuffer,
+  getAudioDuration
+} from "@/utils";
+import { Agent, type Connection, type ConnectionContext } from "agents";
 import { env } from "cloudflare:workers";
 
 interface TranscriberState {
   audioKey: string;
 }
 
+// TODO -- rename
 export class Transcriber extends Agent<Env, TranscriberState> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -19,110 +25,158 @@ export class Transcriber extends Agent<Env, TranscriberState> {
     setupDatabase(this.ctx.storage.sql);
   }
 
-  async onRequest(request: Request): Promise<Response> {
-    return new Response("Method not allowed", { status: 405 });
+  async onConnect(connection: Connection, ctx: ConnectionContext) {
+    const urlStr = connection.url || ctx.request?.url;
+    if (!urlStr) return connection.close(1008, "Connection URL missing");
+
+    const url = new URL(urlStr);
+    const audioKey = url.searchParams.get("audioKey");
+    if (!audioKey) return connection.close(1008, "audioKey required");
+
+    this.setState({ audioKey });
+
+    // Acknowledge
+    connection.send(
+      JSON.stringify({
+        type: "connected",
+        audioKey,
+        message: "Connection established"
+      })
+    );
+
+    // Start transcription + inserts pipeline
+    this.runPipeline(connection, audioKey);
   }
 
-  async runTranscriptionTask(connection: Connection, audioKey: string) {
+  async runPipeline(connection: Connection, audioKey: string) {
     const db = this.ctx.storage.sql;
 
-    // 1. Check current status
-    let transcript;
-    try {
-      transcript = db
-        .exec("SELECT status FROM transcripts WHERE audioKey = ?", audioKey)
-        .one() as { status: string } | undefined;
-    } catch (error) {
-      console.log(error);
-    }
+    // 1️⃣ Transcription
+    const rows: TranscriptSegment[] = [];
 
-    if (transcript?.status === "complete") {
-      const segments = db
-        .exec(
-          "SELECT text, startTime, endTime, id, speaker FROM segments WHERE audioKey = ? ORDER BY startTime ASC",
-          audioKey
-        )
-        .toArray();
+    // TODO -- connection send working...
+    console.log("working on transcript...");
 
-      for (const segment of segments) {
-        connection.send(JSON.stringify(segment));
-      }
-      return;
-    }
+    for await (const chunk of this.transcribe(audioKey)) {
+      const words = chunk.words ?? [];
+      if (!words.length) continue;
 
-    try {
-      // 2. Initialize or Update status to in_progress
-      db.exec(
-        "INSERT INTO transcripts (audioKey, status) VALUES (?, 'in_progress') ON CONFLICT(audioKey) DO UPDATE SET status='in_progress'",
-        audioKey
-      );
+      const phrases = extractPhrases(words as Word[]);
 
-      for await (const whisper_output of this.transcribe(audioKey)) {
-        const words = whisper_output.words ?? [];
-        if (!words.length) continue;
+      for (const phrase of phrases) {
+        const segment: TranscriptSegment = {
+          text: phrase.text,
+          startTime: phrase.start,
+          endTime: phrase.end,
+          id: phrase.id,
+          speaker: ""
+        };
 
-        const phrases = extractPhrases(words as Word[]);
+        const segmentId = `${segment.id}_${crypto.randomUUID()}`;
 
-        // Use a transaction for batch inserting segments
-        for (const phrase of phrases) {
-          const segment: TranscriptSegment = {
-            text: phrase.text,
-            startTime: phrase.start,
-            endTime: phrase.end,
-            id: phrase.id,
-            speaker: ""
-          };
-
+        try {
           db.exec(
             "INSERT INTO segments (id, audioKey, text, startTime, endTime, speaker) VALUES (?, ?, ?, ?, ?, ?)",
-            segment.id + crypto.randomUUID(),
+            segmentId,
             audioKey,
             segment.text,
             segment.startTime,
             segment.endTime,
             segment.speaker
           );
-
-          connection.send(JSON.stringify(segment));
+        } catch (error) {
+          console.error(error);
         }
-      }
 
-      db.exec(
-        "UPDATE transcripts SET status = 'complete' WHERE audioKey = ?",
-        audioKey
-      );
-    } catch (err: any) {
-      console.error(err);
-      db.exec(
-        "UPDATE transcripts SET status = 'error', message = ? WHERE audioKey = ?",
-        err.message ?? "failed",
-        audioKey
-      );
-      connection.send(JSON.stringify({ error: `[Error: ${err.message}]` }));
+        rows.push(segment);
+
+        console.log(segment);
+
+        // Stream transcript segment to frontend
+        connection.send(
+          JSON.stringify({ type: "transcript", transcript: segment })
+        );
+      }
+    }
+
+    db.exec(
+      "UPDATE transcripts SET status='complete' WHERE audioKey=?",
+      audioKey
+    );
+
+    // 2️⃣ Inserts generation (streamed)
+    await this.generateInserts(connection, audioKey, rows);
+
+    // 3️⃣ Notify completion
+    connection.send(JSON.stringify({ type: "insert-complete" }));
+  }
+
+  private async generateInserts(
+    connection: Connection,
+    audioKey: string,
+    segments: TranscriptSegment[]
+  ) {
+    const chunks = this.chunkTranscript(segments, 60, 5);
+
+    for (const chunk of chunks) {
+      console.log("CHUNK: ", chunk);
+      const inserts = await this.generateInsertsForChunk(audioKey, chunk);
+
+      for (const insert of inserts) {
+        // Stream each insert to frontend
+        connection.send(JSON.stringify({ type: "insert", insert }));
+      }
     }
   }
 
-  /**
-   * Public RPC method that other Agents can call
-   */
-  async getFullTranscript(): Promise<string> {
-    const audioKey = this.state.audioKey;
-    if (!audioKey) return "No transcript available.";
+  private chunkTranscript(
+    segments: TranscriptSegment[],
+    windowSeconds = 60,
+    overlapSeconds = 5
+  ): TranscriptSegment[] {
+    if (!segments.length) return [];
 
-    const segments = this.ctx.storage.sql
-      .exec(
-        "SELECT text FROM segments WHERE audioKey = ? ORDER BY startTime ASC",
-        audioKey
-      )
-      .toArray() as { text: string }[];
+    const chunks: TranscriptSegment[] = [];
+    let buffer: TranscriptSegment[] = [];
+    let windowStart = segments[0].startTime;
 
-    return segments.map((s) => s.text).join(" ");
+    for (const seg of segments) {
+      buffer.push(seg);
+      const windowEnd = seg.endTime;
+      const duration = windowEnd - windowStart;
+
+      if (duration >= windowSeconds) {
+        chunks.push({
+          startTime: windowStart,
+          endTime: windowEnd,
+          text: buffer.map((s) => s.text).join(" "),
+          id: "",
+          speaker: ""
+        });
+
+        const cutoff = windowEnd - overlapSeconds;
+        buffer = buffer.filter((s) => s.endTime > cutoff);
+        windowStart = buffer[0]?.startTime ?? windowEnd;
+      }
+    }
+
+    if (buffer.length) {
+      chunks.push({
+        startTime: windowStart,
+        endTime: buffer[buffer.length - 1].endTime,
+        text: buffer.map((s) => s.text).join(" "),
+        id: "",
+        speaker: ""
+      });
+    }
+
+    return chunks;
   }
 
   /**
    * Fetches transcript segments within a window relative to targetTime
    */
-  async getTranscriptWindow(
+  async getTranscriptWindowText(
     targetTime: number | null,
     windowSeconds: number = 10
   ): Promise<string | null> {
@@ -155,80 +209,74 @@ export class Transcriber extends Agent<Env, TranscriberState> {
       .join("\n");
   }
 
-  async onConnect(connection: Connection, ctx: ConnectionContext) {
-    try {
-      // The query parameters from useAgent should be in the connection URL
-      const urlStr = connection.url || ctx.request?.url;
-
-      if (!urlStr) {
-        console.error("No URL available");
-        connection.close(1008, "Connection URL missing");
-        return;
-      }
-
-      console.log("Connection URL:", urlStr);
-      const url = new URL(urlStr);
-
-      // Extract query parameters sent by useAgent
-      const audioKey = url.searchParams.get("audioKey");
-
-      if (!audioKey) {
-        console.error("No audioKey provided in query parameters");
-        connection.close(1008, "audioKey query parameter is required");
-        return;
-      }
-
-      // Store state
-      this.setState({
-        audioKey
-      });
-
-      // Send acknowledgment
-      connection.send(
-        JSON.stringify({
-          type: "connected",
-          message: "Transcription connection established",
-          audioKey,
-          timestamp: Date.now()
-        })
-      );
-
-      // Start transcription process with the audioKey
-      this.ctx.waitUntil(this.runTranscriptionTask(connection, audioKey));
-    } catch (error: any) {
-      console.error("Error in onConnect:", error);
-
-      try {
-        await connection.send(
-          JSON.stringify({
-            type: "error",
-            error: "Failed to establish connection",
-            details: error.message
+  private async generateInsertsForChunk(
+    audioKey: string,
+    chunk: TranscriptSegment
+  ): Promise<Insert[]> {
+    // 1️⃣ LLM generates insert plan
+    const plan = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
+      messages: [
+        {
+          role: "system",
+          content: "You are an audio editor. Create inserts for this chunk."
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            startTime: chunk.startTime,
+            endTime: chunk.endTime,
+            transcript: chunk.text
           })
-        );
-        await connection.close(1011, "Internal server error");
-      } catch (closeError) {
-        console.error("Error closing connection:", closeError);
+        }
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              type: { type: "string" },
+              atTime: { type: "number" },
+              title: { type: "string" },
+              content: { type: "string" }
+            },
+            required: ["type", "atTime", "title", "content"]
+          }
+        }
       }
+    });
+
+    if (!Array.isArray(plan.response) || !plan.response.length) return [];
+
+    const inserts: Insert[] = [];
+
+    for (const item of plan.response) {
+      if (!item.content) continue;
+
+      // 2️⃣ Generate TTS
+      const { audio }: any = await env.AI.run("@cf/myshell-ai/melotts", {
+        prompt: item.content,
+        lang: "en"
+      });
+      const audioKeyInsert = `${audioKey}-${crypto.randomUUID()}.mp3`;
+      await env.R2_AUDIO_BUCKET.put(audioKeyInsert, base64ToArrayBuffer(audio));
+      const duration = await getAudioDuration(audio);
+
+      inserts.push({
+        id: crypto.randomUUID(),
+        type: item.type,
+        title: item.title,
+        startTime: item.atTime,
+        endTime: item.atTime + duration,
+        duration,
+        audioUrl: audioKeyInsert,
+        enabled: true,
+        metadata: { chunkStart: chunk.startTime, chunkEnd: chunk.endTime }
+      });
     }
-  }
 
-  async onMessage(connection: Connection, message: WSMessage) {
-    console.log("msg rcv: ", message);
-  }
-
-  async onError(error: unknown) {
-    console.error(`WS error: ${error}`);
-  }
-
-  async onClose(
-    connection: Connection,
-    code: number,
-    reason: string,
-    wasClean: boolean
-  ): Promise<void> {
-    console.log(`WS closed: ${code} - ${reason} - wasClean: ${wasClean}`);
-    connection.close();
+    return inserts;
   }
 
   /**
@@ -237,13 +285,15 @@ export class Transcriber extends Agent<Env, TranscriberState> {
    */
   async *transcribe(
     audioKey: string
-  ): AsyncGenerator<Ai_Cf_Openai_Whisper_Output, void, unknown> {
+  ): AsyncGenerator<Ai_Cf_Openai_Whisper_Output> {
     const chunks = await this.getAudioChunks(audioKey);
 
     let accumulatedSegments: Phrase[] = [];
     let timeOffset = 0;
 
     for (let i = 0; i < chunks.length; i++) {
+      console.log("transcribing...");
+
       const chunk = chunks[i];
 
       let lastWordTimestamp = 0;

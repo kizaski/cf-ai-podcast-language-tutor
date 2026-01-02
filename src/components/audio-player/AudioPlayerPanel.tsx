@@ -17,24 +17,29 @@ export const AudioPlayerPanel = ({
   if (!initialData) return <EmptyAudioPlayer />;
 
   const { sessionId } = useSession();
-
   useAgent({
     agent: "transcriber",
     name: sessionId,
-    query: {
-      audioKey: initialData.episode.id
-    },
-    onMessage: (message: any) => {
+    query: { audioKey: initialData.episode.id },
+    onMessage: (message) => {
+      const data = JSON.parse(message.data);
       setEpisodeData!((prev) => {
         if (!prev) return prev;
-        return {
-          ...prev,
-          transcript: [...prev.transcript, JSON.parse(message.data)]
-        };
+
+        if (data.type === "transcript") {
+          return { ...prev, transcript: [...prev.transcript, data.transcript] };
+        }
+        if (data.type === "insert") {
+          return { ...prev, inserts: [...prev.inserts, data.insert] };
+        }
+        if (data.type === "insert-complete") {
+          console.log("All inserts generated");
+        }
+        return prev;
       });
     },
-    onOpen: () => console.log("Connection established"),
-    onClose: (e) => console.log("Connection closed" + JSON.stringify(e))
+    onOpen: () => console.log("WS connected"),
+    onClose: () => console.log("WS closed")
   });
 
   return (

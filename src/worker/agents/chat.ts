@@ -63,7 +63,7 @@ export class Chat extends AIChatAgent<Env> {
       : false;
 
     const fullTranscript =
-      await transcriberStub.getTranscriptWindow(currentTime);
+      await transcriberStub.getTranscriptWindowText(currentTime);
 
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {

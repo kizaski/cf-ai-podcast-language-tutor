@@ -67,6 +67,8 @@ npm run deploy
 
 - Learn a langauge by listening a podcast more effortlessly.
 
+- Focus on the content of a foreign language podcast that you understand at a lower level (A2-B1/2)  
+
 ## Project Structure
 
 `TODO`

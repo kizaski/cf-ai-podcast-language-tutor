@@ -1,10 +1,6 @@
 import { getSessionId } from "@/utils";
 import { routeAgentRequest } from "agents";
-import {
-  handleAudioQuery,
-  handleAudioUpload,
-  handleInsertsStream
-} from "./episodes";
+import { handleAudioQuery, handleAudioUpload } from "./episodes";
 import { handleR2Query } from "./r2";
 
 /**
@@ -55,16 +51,6 @@ export default {
       if (request.method === "GET" && parts.length === 4) {
         // const episodeId = parts[3];
         return handleAudioQuery(request, env, lastPart);
-      }
-
-      // GET /api/episodes/:id/inserts-stream
-      if (
-        request.method === "GET" &&
-        parts.length === 5 &&
-        parts[4] === "inserts-stream"
-      ) {
-        const episodeId = parts[3];
-        return handleInsertsStream(request, env, episodeId);
       }
     }
 

@@ -51,11 +51,43 @@ export class Transcriber extends Agent<Env, TranscriberState> {
   async runPipeline(connection: Connection, audioKey: string) {
     const db = this.ctx.storage.sql;
 
-    // 1️⃣ Transcription
     const rows: TranscriptSegment[] = [];
+
+    let transcript;
+    try {
+      transcript = db
+        .exec("SELECT status FROM transcripts WHERE audioKey = ?", audioKey)
+        .one() as { status: string } | undefined;
+    } catch (error) {
+      console.log(error);
+    }
+
+    if (transcript?.status === "complete") {
+      let segmentRows: TranscriptSegment[] = [];
+      try {
+        segmentRows = this
+          .sql<TranscriptSegment>`SELECT text, startTime, endTime, id, speaker FROM segments WHERE audioKey = ${audioKey} ORDER BY startTime ASC`;
+      } catch (error) {
+        console.log(error);
+      }
+
+      rows.push(...segmentRows);
+
+      for (const segment of segmentRows) {
+        connection.send(
+          JSON.stringify({ type: "transcript", transcript: segment })
+        );
+      }
+      return;
+    }
 
     // TODO -- connection send working...
     console.log("working on transcript...");
+    db.exec(
+      "INSERT OR IGNORE INTO transcripts (audioKey, status) VALUES (?, ?)",
+      audioKey,
+      "in_progress"
+    );
 
     for await (const chunk of this.transcribe(audioKey)) {
       const words = chunk.words ?? [];
@@ -104,10 +136,8 @@ export class Transcriber extends Agent<Env, TranscriberState> {
       audioKey
     );
 
-    // 2️⃣ Inserts generation (streamed)
     await this.generateInserts(connection, audioKey, rows);
 
-    // 3️⃣ Notify completion
     connection.send(JSON.stringify({ type: "insert-complete" }));
   }
 
@@ -213,12 +243,27 @@ export class Transcriber extends Agent<Env, TranscriberState> {
     audioKey: string,
     chunk: TranscriptSegment
   ): Promise<Insert[]> {
-    // 1️⃣ LLM generates insert plan
+    // 1️⃣ Ask LLM to generate exactly one intro and one outro for this chunk
     const plan = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
       messages: [
         {
           role: "system",
-          content: "You are an audio editor. Create inserts for this chunk."
+          content: `
+You are an AI assistant creating language-learning primers for podcast audio. 
+For this 60-second transcript segment, generate exactly TWO inserts:
+
+1. Intro (before the podcast audio): 
+   - 2-3 sentences max
+   - Summarize or explain the key content of this chunk for a language learner
+2. Outro (after the podcast audio):
+   - 1-2 sentences max
+   - Recap the main takeaway from this chunk
+
+Constraints:
+- ONLY one intro and one outro per chunk
+- Do NOT reference content outside this chunk
+- Tone: friendly, conversational, learner-focused
+        `
         },
         {
           role: "user",
@@ -254,7 +299,7 @@ export class Transcriber extends Agent<Env, TranscriberState> {
     for (const item of plan.response) {
       if (!item.content) continue;
 
-      // 2️⃣ Generate TTS
+      // 2️⃣ Generate TTS for the insert
       const { audio }: any = await env.AI.run("@cf/myshell-ai/melotts", {
         prompt: item.content,
         lang: "en"

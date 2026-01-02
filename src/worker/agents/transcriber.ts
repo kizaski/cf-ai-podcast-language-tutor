@@ -321,7 +321,9 @@ export class Transcriber extends Agent<Env, TranscriberState> {
 
   private getCachedInserts(audioKey: string, chunk: TranscriptSegment) {
     const cachedInserts = this.sql<Insert>`SELECT * FROM inserts 
-       WHERE audioKey = ${audioKey}`;
+       WHERE audioKey = ${audioKey}
+       AND startTime = ${chunk.startTime} 
+       AND endTime = ${chunk.endTime}`;
     return cachedInserts ?? [];
   }
 
@@ -427,6 +429,9 @@ Constraints:
       inserts.push(insert);
 
       // Save to DB for caching
+      console.log(
+        `Saving insert to cache: id: ${insert.id} startTime: ${insert.startTime} endTime: ${insert.endTime}`
+      );
       try {
         this
           .sql`INSERT INTO inserts (id, audioKey, startTime, endTime, type, title, text, audioUrl, duration, enabled)

@@ -40,7 +40,8 @@ export function setupDatabase(sql: SqlStorage) {
       text TEXT NOT NULL,
       enabled INTEGER NOT NULL DEFAULT 1, -- boolean
       metadata TEXT, -- JSON string
-      createdAt REAL DEFAULT (unixepoch())
+      createdAt REAL DEFAULT (unixepoch()),
+      UNIQUE (startTime, endTime)
     );
     CREATE INDEX IF NOT EXISTS idx_inserts_audioKey ON inserts(audioKey);
   `);

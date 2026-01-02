@@ -1,8 +1,8 @@
-import type {
-  TranscriptSegment,
-  Word,
-  Phrase,
-  Insert
+import {
+  type TranscriptSegment,
+  type Word,
+  type Insert,
+  type Phrase
 } from "@/types/audio-types";
 import {
   extractPhrases,
@@ -19,166 +19,215 @@ interface TranscriberState {
 
 // TODO -- rename
 export class Transcriber extends Agent<Env, TranscriberState> {
+  private activeInsertTasks = new Set<Promise<void>>();
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    // Initialize schema on startup
+    console.log("Transcriber initialized");
     setupDatabase(this.ctx.storage.sql);
   }
 
   async onConnect(connection: Connection, ctx: ConnectionContext) {
-    const urlStr = connection.url || ctx.request?.url;
-    if (!urlStr) return connection.close(1008, "Connection URL missing");
-
-    const url = new URL(urlStr);
+    console.log("Client connected:", connection.url);
+    const url = new URL(connection.url || ctx.request?.url || "");
     const audioKey = url.searchParams.get("audioKey");
-    if (!audioKey) return connection.close(1008, "audioKey required");
 
+    if (!audioKey) {
+      console.warn("audioKey missing, closing connection");
+      return connection.close(1008, "audioKey required");
+    }
+
+    console.log("Setting state audioKey:", audioKey);
     this.setState({ audioKey });
-
-    // Acknowledge
-    connection.send(
-      JSON.stringify({
-        type: "connected",
-        audioKey,
-        message: "Connection established"
-      })
-    );
+    connection.send(JSON.stringify({ type: "connected", audioKey }));
 
     // Start transcription + inserts pipeline
-    this.runPipeline(connection, audioKey);
+    console.log("Starting pipeline for audioKey:", audioKey);
+    await this.runPipeline(connection, audioKey);
   }
 
   async runPipeline(connection: Connection, audioKey: string) {
     const db = this.ctx.storage.sql;
-
-    const rows: TranscriptSegment[] = [];
-
-    let transcript;
+    let existing;
     try {
-      transcript = db
+      existing = db
         .exec("SELECT status FROM transcripts WHERE audioKey = ?", audioKey)
         .one() as { status: string } | undefined;
     } catch (error) {
       console.log(error);
     }
 
-    if (transcript?.status === "complete") {
-      let segments: TranscriptSegment[] = [];
-      try {
-        segments = this
-          .sql<TranscriptSegment>`SELECT text, startTime, endTime, id, speaker FROM segments WHERE audioKey = ${audioKey} ORDER BY startTime ASC`;
-      } catch (error) {
-        console.log(error);
-      }
-
-      for (const segment of segments) {
-        connection.send(
-          JSON.stringify({ type: "transcript", transcript: segment })
-        );
-      }
-
-      const chunks = this.chunkTranscript(segments);
-
-      let hasCached = false;
-
-      for (const chunk of chunks) {
-        const cached = this.getCachedInserts(audioKey, chunk);
-        if (cached.length) {
-          hasCached = true;
-          for (const insert of cached) {
-            connection.send(JSON.stringify({ type: "insert", insert }));
-          }
-        }
-      }
-
-      if (!hasCached) {
-        for (const chunk of chunks) {
-          const inserts = await this.generateInsertsForChunk(audioKey, chunk);
-          for (const insert of inserts) {
-            connection.send(JSON.stringify({ type: "insert", insert }));
-          }
-        }
-      }
-
-      return;
+    console.log("Existing transcript status:", existing?.status);
+    if (existing?.status === "complete") {
+      console.log("Streaming cached data for audioKey:", audioKey);
+      return this.streamCachedData(connection, audioKey);
     }
 
-    // TODO -- connection send working...
-    console.log("working on transcript...");
+    console.log("Processing new transcription for audioKey:", audioKey);
+    this.processNewTranscription(connection, audioKey);
+  }
+
+  private async streamCachedData(connection: Connection, audioKey: string) {
+    console.log("Fetching segments from DB for audioKey:", audioKey);
+    const segments = this.sql<TranscriptSegment>`
+      SELECT text, startTime, endTime, id, speaker 
+      FROM segments WHERE audioKey = ${audioKey} ORDER BY startTime ASC`;
+
+    console.log(`Streaming ${segments.length} cached segments`);
+    for (const segment of segments) {
+      connection.send(
+        JSON.stringify({ type: "transcript", transcript: segment })
+      );
+    }
+
+    const chunks = this.chunkTranscript(segments);
+    console.log(`Streaming inserts in ${chunks.length} chunks`);
+    for (const chunk of chunks) {
+      const inserts = await this.getOrGenerateInserts(audioKey, chunk);
+      inserts.forEach((insert) => {
+        console.log("Streaming cached insert:", insert.id);
+        connection.send(JSON.stringify({ type: "insert", insert }));
+      });
+    }
+
+    console.log("All inserts streamed");
+    connection.send(JSON.stringify({ type: "insert-complete" }));
+  }
+
+  private async processNewTranscription(
+    connection: Connection,
+    audioKey: string
+  ) {
+    console.log("Inserting in_progress transcript record for:", audioKey);
+    const db = this.ctx.storage.sql;
     db.exec(
-      "INSERT OR IGNORE INTO transcripts (audioKey, status) VALUES (?, ?)",
-      audioKey,
-      "in_progress"
+      "INSERT OR IGNORE INTO transcripts (audioKey, status) VALUES (?, 'in_progress')",
+      audioKey
     );
 
-    for await (const chunk of this.transcribe(audioKey)) {
-      const words = chunk.words ?? [];
-      if (!words.length) continue;
+    let currentBuffer: TranscriptSegment[] = [];
+    let currentWordCount = 0;
 
-      const phrases = extractPhrases(words as Word[]);
+    for await (const result of this.transcribe(audioKey)) {
+      console.log("Transcription chunk received:", result.text?.slice(0, 50));
+      const phrases = extractPhrases(result.words as Word[]);
 
       for (const phrase of phrases) {
-        const segment: TranscriptSegment = {
-          text: phrase.text,
-          startTime: phrase.start,
-          endTime: phrase.end,
-          id: phrase.id,
-          speaker: ""
-        };
+        const segment = this.mapPhraseToSegment(phrase);
+        console.log("Saving segment:", segment.id);
+        this.saveSegment(audioKey, segment);
 
-        const segmentId = `${segment.id}_${crypto.randomUUID()}`;
-
-        try {
-          db.exec(
-            "INSERT INTO segments (id, audioKey, text, startTime, endTime, speaker) VALUES (?, ?, ?, ?, ?, ?)",
-            segmentId,
-            audioKey,
-            segment.text,
-            segment.startTime,
-            segment.endTime,
-            segment.speaker
-          );
-        } catch (error) {
-          console.error(error);
-        }
-
-        rows.push(segment);
-
-        console.log(segment);
-
-        // Stream transcript segment to frontend
         connection.send(
           JSON.stringify({ type: "transcript", transcript: segment })
         );
+
+        currentBuffer.push(segment);
+        currentWordCount += segment.text.length;
+
+        // TODO -- make this (120 * 7) dynamic
+        if (currentWordCount > 120 * 7) {
+          console.log("Triggering background insert for buffered segments");
+          this.triggerBackgroundInsert(connection, audioKey, [
+            ...currentBuffer
+          ]);
+          currentBuffer = [];
+          currentWordCount = 0;
+        }
       }
     }
 
+    if (currentBuffer.length > 0) {
+      console.log("Triggering final background insert for leftover segments");
+      this.triggerBackgroundInsert(connection, audioKey, currentBuffer);
+    }
+
+    await Promise.all(this.activeInsertTasks);
+    console.log("All insert tasks complete, marking transcript complete");
     db.exec(
       "UPDATE transcripts SET status='complete' WHERE audioKey=?",
       audioKey
     );
-
-    await this.generateInserts(connection, audioKey, rows);
-
     connection.send(JSON.stringify({ type: "insert-complete" }));
   }
 
-  private async generateInserts(
+  private triggerBackgroundInsert(
     connection: Connection,
     audioKey: string,
     segments: TranscriptSegment[]
   ) {
-    const chunks = this.chunkTranscript(segments, 60, 5);
+    console.log(
+      "Creating background insert task for segments:",
+      segments.map((s) => s.id)
+    );
+    const chunk = {
+      startTime: segments[0].startTime,
+      endTime: segments[segments.length - 1].endTime,
+      text: segments.map((s) => s.text).join(" "),
+      id: crypto.randomUUID(),
+      speaker: ""
+    };
 
-    for (const chunk of chunks) {
-      console.log("CHUNK: ", chunk);
-      const inserts = await this.generateInsertsForChunk(audioKey, chunk);
+    const task = this.getOrGenerateInserts(audioKey, chunk)
+      .then((inserts) => {
+        inserts.forEach((insert) => {
+          console.log("Streaming generated insert:", insert.id);
+          connection.send(JSON.stringify({ type: "insert", insert }));
+        });
+      })
+      .finally(() => {
+        console.log("Background insert task complete for chunk:", chunk.id);
+        this.activeInsertTasks.delete(task);
+      });
 
-      for (const insert of inserts) {
-        // Stream each insert to frontend
-        connection.send(JSON.stringify({ type: "insert", insert }));
-      }
+    this.activeInsertTasks.add(task);
+  }
+
+  private mapPhraseToSegment(phrase: Phrase): TranscriptSegment {
+    return {
+      text: phrase.text,
+      startTime: phrase.start,
+      endTime: phrase.end,
+      id: phrase.id,
+      speaker: ""
+    };
+  }
+
+  private saveSegment(audioKey: string, s: TranscriptSegment) {
+    try {
+      console.log("DB insert segment:", s.id);
+      this.ctx.storage.sql.exec(
+        "INSERT INTO segments (id, audioKey, text, startTime, endTime, speaker) VALUES (?, ?, ?, ?, ?, ?)",
+        `${s.id}_${crypto.randomUUID()}`,
+        audioKey,
+        s.text,
+        s.startTime,
+        s.endTime,
+        s.speaker
+      );
+    } catch (e) {
+      console.error("DB Insert Error", e);
     }
+  }
+
+  private async getOrGenerateInserts(
+    audioKey: string,
+    chunk: TranscriptSegment
+  ): Promise<Insert[]> {
+    console.log(
+      "Checking cached inserts for chunk:",
+      chunk.startTime,
+      chunk.endTime
+    );
+    const cached = this.getCachedInserts(audioKey, chunk);
+    if (cached.length > 0) {
+      console.log(
+        "Found cached inserts:",
+        cached.map((i) => i.id)
+      );
+      return cached;
+    }
+    console.log("No cached inserts, generating new inserts for chunk");
+    return this.generateInsertsForChunk(audioKey, chunk);
   }
 
   private chunkTranscript(
@@ -186,6 +235,7 @@ export class Transcriber extends Agent<Env, TranscriberState> {
     windowSeconds = 60,
     overlapSeconds = 5
   ): TranscriptSegment[] {
+    console.log("Chunking transcript segments");
     if (!segments.length) return [];
 
     const chunks: TranscriptSegment[] = [];
@@ -222,6 +272,7 @@ export class Transcriber extends Agent<Env, TranscriberState> {
       });
     }
 
+    console.log(`Transcript chunked into ${chunks.length} chunks`);
     return chunks;
   }
 
@@ -303,6 +354,7 @@ Constraints:
 - ONLY one intro and one outro per chunk
 - Do NOT reference content outside this chunk
 - Tone: friendly, conversational, learner-focused
+- ONLY reply in English, no words in the target language
         `
         },
         {
@@ -395,16 +447,12 @@ Constraints:
     let timeOffset = 0;
 
     for (let i = 0; i < chunks.length; i++) {
-      console.log("transcribing...");
-
+      console.log(`Transcribing chunk ${i + 1}/${chunks.length}`);
       const chunk = chunks[i];
 
       let lastWordTimestamp = 0;
-
-      // Transcribe this chunk
       const result = await this.transcribeChunk(chunk);
 
-      // Normalize word timestamps using timeOffset
       if (result.words?.length) {
         const normalizedWords = result.words
           .filter(
@@ -424,9 +472,7 @@ Constraints:
         accumulatedSegments.push(...phrases);
       }
 
-      // Yield normalized chunk
       yield result;
-
       timeOffset = lastWordTimestamp;
     }
   }
@@ -449,6 +495,10 @@ Constraints:
   async transcribeChunk(
     chunkBuffer: ArrayBuffer
   ): Promise<Ai_Cf_Openai_Whisper_Output> {
+    console.log(
+      "Transcribing raw audio chunk of size:",
+      chunkBuffer.byteLength
+    );
     const byteArray = Array.from(new Uint8Array(chunkBuffer));
 
     if (byteArray.length === 0) {

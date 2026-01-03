@@ -1,15 +1,5 @@
-import {
-  tools,
-  executions,
-  toolsBlockedByKeywords,
-  toolKeywordRules
-} from "@/tools";
-import {
-  cleanupMessages,
-  processToolCalls,
-  shouldAllowToolCall,
-  shouldCallTools
-} from "@/utils";
+import { tools, executions, toolKeywordRules } from "@/tools";
+import { cleanupMessages, processToolCalls, shouldCallTools } from "@/utils";
 import type { Schedule } from "agents";
 import { AIChatAgent } from "agents/ai-chat-agent";
 import {
@@ -55,8 +45,6 @@ export class Chat extends AIChatAgent<Env> {
       Object.keys(allTools),
       toolKeywordRules
     );
-
-    console.log("tool permissions", JSON.stringify(toolPermissions));
 
     const allAllowedTools = Object.fromEntries(
       Object.entries(allTools).filter(([toolName]: any) => {
@@ -110,14 +98,13 @@ export class Chat extends AIChatAgent<Env> {
           executions
         });
 
-        // TODO -- enhance prompt conditionally with ((WITH TOOLS (?)))
+        // TODO -- enhance system prompt with optional explanations IF user is not writing in English/native lang (with the help of an llm or API)
+        //
         // PROMPT extension in [content]:
         // If the user NOT writing to you in English, at the end of your clarification
         // and/or explanation you should fix his or her grammatical or vocabulary mistakes,
         // tell them what they are and suggest a better rephrase.
         //
-        // Try to make the response not too long
-
         const result = streamText({
           system: `Autonomous Language Tutor
 You are an autonomous language tutor helping a learner with a foreign-language podcast.

@@ -54,7 +54,8 @@
 - IMPORTANT: Add tool for adding additional assitant message for correcting user's message IF in target language (german, french, japanese etc.)  
 - IMPORTANT: Add assistant message (and conditionally showing it in frontend) as "system" prompt  
 - Add automatic prompt write + send by clicking a word (or hover, button explain appears)  
-- Add rewind to word agentically initiated if many messages are sent (increase learner profile's level)  
+- Add rewind to word agentically initiated if many messages are sent (increase learner profile's level) 
+- Enhance system prompt with optional explanations IF user is not writing in English/native lang (with the help of an llm or API) 
 
 ### Samples / Generation / Tools
 - IMPORTANT: Add samples  

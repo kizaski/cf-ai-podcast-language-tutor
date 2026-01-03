@@ -321,11 +321,17 @@ export class Transcriber extends Agent<Env, TranscriberState> {
       .join("\n");
   }
 
-  private getCachedInserts(audioKey: string, chunk: TranscriptSegment) {
-    const cachedInserts = this.sql<Insert>`SELECT * FROM inserts 
-       WHERE audioKey = ${audioKey}
-       AND startTime = ${chunk.startTime} 
-       AND endTime = ${chunk.endTime}`;
+  private getCachedInserts(
+    audioKey: string,
+    chunk: TranscriptSegment
+  ): Insert[] {
+    const cachedInserts = this.sql<Insert>`
+        SELECT * FROM inserts 
+        WHERE audioKey = ${audioKey}
+          AND startTime >= ${chunk.startTime} 
+          AND startTime < ${chunk.endTime}
+        ORDER BY startTime ASC
+      `;
     return cachedInserts ?? [];
   }
 
@@ -360,10 +366,10 @@ For this 60-second transcript segment, generate exactly TWO inserts:
    - Recap the main takeaway from this chunk
 
 Constraints:
+- IMPORTANT: ONLY reply in English, NO words in the target language
 - ONLY one intro and one outro per chunk
 - Do NOT reference content outside this chunk
 - Tone: friendly, conversational, learner-focused
-- ONLY reply in English, no words in the target language
         `
         },
         {

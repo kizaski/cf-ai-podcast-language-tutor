@@ -6,7 +6,6 @@
 - Insert doesnt play on seek always after seeking, only on seek-pause-play  
 - On inserts on and off and play-pause the first insert (and next ones) get played instead of the one at the playhead <--
 - IMPORTANT: newly enabled (during playback) Inserts dont play (no matter where in playback)  
-- Fix inserts caching  
 
 ### Episodes / UI Fixes
 - Remove emptystate card when in /episodes view  

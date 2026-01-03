@@ -8,6 +8,8 @@ import { z } from "zod/v3";
 import { type Chat } from "./worker/agents/chat";
 import { getCurrentAgent } from "agents";
 import { scheduleSchema } from "agents/schedule";
+import type { Transcriber } from "./worker/agents/transcriber";
+import { env } from "cloudflare:workers";
 
 /**
  * Weather information tool that requires human confirmation
@@ -108,6 +110,19 @@ const cancelScheduledTask = tool({
   }
 });
 
+const answerRegardingThePlayback = tool({
+  description: "Check the current status of podcast playback and report back",
+  inputSchema: z.object({
+    prompt: z.string().optional()
+  }),
+  execute: async ({ prompt }: any) => {
+    const { agent } = getCurrentAgent<Chat>();
+
+    if (agent?.isPlayingPodcast) return `You are currently playing the podcast`;
+    else return `You are NOT currently playing the podcast`;
+  }
+});
+
 // TODO -- add Podwise tool
 // TODO -- add tool for getting podcast from url (spotify or direct)
 
@@ -116,6 +131,7 @@ const cancelScheduledTask = tool({
  * These will be provided to the AI model to describe available capabilities
  */
 export const tools = {
+  answerRegardingThePlayback
   // getWeatherInformation,
   // getLocalTime,
   // scheduleTask,
@@ -123,6 +139,20 @@ export const tools = {
   // cancelScheduledTask
   // answerUserPrompt
 } satisfies ToolSet;
+
+// Each tool that requires keywords -> array of keywords that must ALL be present
+export const toolKeywordRules = {
+  answerRegardingThePlayback: {
+    verbs: ["tell me", "what is", "give me"],
+    qualifiers: ["current"],
+    subjects: ["podcast"],
+    aspects: ["status", "playback status"]
+  }
+} as const;
+
+export const toolsBlockedByKeywords = Object.keys(tools).filter(
+  (k) => k === "answerRegardingThePlayback"
+) as (keyof typeof tools)[];
 
 /**
  * Implementation of confirmation-required tools

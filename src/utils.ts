@@ -10,6 +10,7 @@ import { convertToModelMessages, isToolUIPart } from "ai";
 import { APPROVAL } from "./shared";
 import { parseBuffer } from "music-metadata";
 import type { Phrase, Word } from "./types/audio-types";
+import { toolKeywordRules } from "./tools";
 
 export function setupDatabase(sql: SqlStorage) {
   // Create tables if they don't exist
@@ -158,6 +159,85 @@ function isValidToolName<K extends PropertyKey, T extends object>(
   obj: T
 ): key is K & keyof T {
   return key in obj;
+}
+
+//
+// Tools Utils
+//
+type SlotRule = readonly string[];
+type SentenceRule = Record<string, SlotRule>;
+
+type ToolKeywordRules = Record<string, SentenceRule>;
+
+function phraseMatches(text: string, phrase: string): boolean {
+  return phrase
+    .toLowerCase()
+    .split(/\s+/)
+    .every((word) => text.includes(word));
+}
+
+function slotMatches(text: string, slot: SlotRule): boolean {
+  return slot.some((phrase) => phraseMatches(text, phrase));
+}
+
+export function shouldCallTools(
+  messages: readonly UIMessage[],
+  toolNames: readonly string[],
+  toolKeywordRules: ToolKeywordRules
+): Record<string, boolean> {
+  const lastUserMessage = [...messages]
+    .reverse()
+    .find((m) => m.role === "user");
+
+  const lastUserText =
+    lastUserMessage?.parts
+      ?.filter((p) => p.type === "text")
+      .map((p) => p.text)
+      .join(" ")
+      .toLowerCase() ?? "";
+
+  return Object.fromEntries(
+    toolNames.map((toolName) => {
+      const rule = toolKeywordRules[toolName];
+
+      if (!rule) return [toolName, true];
+
+      // ALL slots must match -> logical sentence structure
+      const matches = Object.values(rule).every((slot) =>
+        slotMatches(lastUserText, slot)
+      );
+
+      return [toolName, matches];
+    })
+  );
+}
+
+// Not used
+export function shouldAllowToolCall(messages: UIMessage[], toolName: string) {
+  if (!(toolName in toolKeywordRules)) return true;
+
+  const keywords = toolKeywordRules.answerRegardingThePlayback.aspects;
+
+  const lastUserMessage = [...messages]
+    .reverse()
+    .find((msg) => msg.role === "user");
+
+  const lastUserText =
+    lastUserMessage?.parts
+      ?.filter((p) => p.type === "text")
+      .map((p) => p.text || "")
+      .join(" ")
+      .trim() || "";
+
+  let allowToolCall = false;
+
+  if (lastUserText) {
+    allowToolCall = keywords.some((k) =>
+      lastUserText.toLowerCase().includes(k)
+    );
+  }
+
+  return allowToolCall;
 }
 
 /**

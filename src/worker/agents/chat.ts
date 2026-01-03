@@ -1,5 +1,15 @@
-import { tools, executions } from "@/tools";
-import { cleanupMessages, processToolCalls } from "@/utils";
+import {
+  tools,
+  executions,
+  toolsBlockedByKeywords,
+  toolKeywordRules
+} from "@/tools";
+import {
+  cleanupMessages,
+  processToolCalls,
+  shouldAllowToolCall,
+  shouldCallTools
+} from "@/utils";
 import type { Schedule } from "agents";
 import { AIChatAgent } from "agents/ai-chat-agent";
 import {
@@ -21,6 +31,8 @@ const model = workersai("@cf/meta/llama-3.1-8b-instruct-fp8");
  * Chat Agent implementation that handles real-time AI chat interactions
  */
 export class Chat extends AIChatAgent<Env> {
+  isPlayingPodcast = true;
+
   /**
    * Handles incoming chat messages and manages the response stream
    */
@@ -37,6 +49,21 @@ export class Chat extends AIChatAgent<Env> {
       ...tools
       // ...this.mcp.getAITools()
     };
+
+    const toolPermissions = shouldCallTools(
+      this.messages,
+      Object.keys(allTools),
+      toolKeywordRules
+    );
+
+    console.log("tool permissions", JSON.stringify(toolPermissions));
+
+    const allAllowedTools = Object.fromEntries(
+      Object.entries(allTools).filter(([toolName]: any) => {
+        return toolPermissions[toolName];
+      })
+    );
+
     const transcriberStub = env.Transcriber.getByName(this.name);
 
     const lastMessageWithTime = [...this.messages]
@@ -121,11 +148,11 @@ ${fullTranscript || "No transcript available"}
 `,
           messages: convertToModelMessages(processedMessages),
           model,
-          tools: allTools,
+          tools: allAllowedTools,
           // Type boundary: streamText expects specific tool types, but base class uses ToolSet
           // This is safe because our tools satisfy ToolSet interface (verified by 'satisfies' in tools.ts)
           onFinish: onFinish as unknown as StreamTextOnFinishCallback<
-            typeof allTools
+            typeof allAllowedTools
           >,
           stopWhen: stepCountIs(10)
         });

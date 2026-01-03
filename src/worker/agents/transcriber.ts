@@ -23,6 +23,8 @@ interface TranscriberState {
 // TODO -- rename
 export class Transcriber extends Agent<Env, TranscriberState> {
   private activeInsertTasks = new Set<Promise<void>>();
+  // doesnt work in Chat tool, use Chat agent in-memory vars for its tools and this for this agent's tools
+  isPlayingPodcast = false;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);

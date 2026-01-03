@@ -19,14 +19,7 @@ export const AudioPlayerPanelInner = ({
    * (only enabled inserts should be scheduled)
    */
   const enabledInserts = useMemo(
-    () =>
-      episodeData.inserts
-        .filter((i) => i.enabled)
-        .map((i) => ({
-          id: i.id,
-          startTime: i.startTime,
-          audioUrl: i.audioUrl
-        })),
+    () => episodeData.inserts.filter((i) => i.enabled),
     [episodeData.inserts]
   );
 

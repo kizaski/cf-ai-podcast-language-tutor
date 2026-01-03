@@ -1,10 +1,10 @@
 ## TODO -- To-fix  
 
 ### Inserts / Playback Issues
-- inserts play in sequence after seeking main audio  
+- inserts play in sequence after seeking main audio x
 - Duplicate main audios on seek  
 - Insert doesnt play on seek always after seeking, only on seek-pause-play  
-- On inserts on and off and play-pause the first insert (and next ones) get played instead of the one at the playhead  
+- On inserts on and off and play-pause the first insert (and next ones) get played instead of the one at the playhead <--
 - IMPORTANT: newly enabled (during playback) Inserts dont play (no matter where in playback)  
 - Fix inserts caching  
 

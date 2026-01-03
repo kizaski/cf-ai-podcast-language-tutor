@@ -1,14 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Howl } from "howler";
 import { usePodcastPlaybackState } from "@/stores/usePlaybackstate";
+import type { Insert } from "@/types/audio-types";
 
 /* ---------------- Types ---------------- */
-
-interface ScheduledInsert {
-  id: string;
-  startTime: number;
-  audioUrl: string;
-}
 
 export interface PodcastPlayerState {
   play: () => void;
@@ -25,7 +20,7 @@ export interface PodcastPlayerState {
 
 export function usePodcastWithInserts(
   podcastUrl: string | null,
-  inserts: ScheduledInsert[] | null
+  inserts: Insert[] | null
 ): PodcastPlayerState {
   const podcastRef = useRef<Howl | null>(null);
   const insertRef = useRef<Howl | null>(null);
@@ -35,6 +30,9 @@ export function usePodcastWithInserts(
   const monitorRef = useRef<number | null>(null);
   const pausedSeekRef = useRef(0);
   const insertPlayingRef = useRef(false);
+  const sortedInsertsRef = useRef<Insert[]>([]);
+  const playedInsertsTimeRef = useRef<Map<string, number> | null>(new Map());
+  const insertQueueRef = useRef<Insert[]>([]);
 
   const podcastObjectUrlRef = useRef<string | null>(null);
 
@@ -52,6 +50,15 @@ export function usePodcastWithInserts(
 
   const getFormatFromMime = (mime: string | null): string[] =>
     mime ? [mime.split("/")[1]] : [];
+
+  const syncInsertIndexToTime = (time: number) => {
+    const sorted = sortedInsertsRef.current;
+
+    // Find first insert that hasn't played yet
+    const index = sorted.findIndex((insert) => insert.startTime > time);
+
+    insertIndexRef.current = index === -1 ? sorted.length : index;
+  };
 
   /* ---------------- Podcast Setup ---------------- */
 
@@ -90,6 +97,27 @@ export function usePodcastWithInserts(
       cleanup();
     };
   }, [podcastUrl]);
+
+  /* ---------------- Sorted inserts management ---------------- */
+
+  useEffect(() => {
+    if (!inserts || inserts.length === 0) {
+      sortedInsertsRef.current = [];
+      insertIndexRef.current = 0;
+      playedInsertsTimeRef.current?.clear();
+      return;
+    }
+
+    sortedInsertsRef.current = [...inserts].sort(
+      (a, b) => a.startTime - b.startTime
+    );
+
+    console.log(sortedInsertsRef.current);
+
+    // Reset index when inserts change
+    insertIndexRef.current = 0;
+    playedInsertsTimeRef.current?.clear();
+  }, [inserts]);
 
   /* ---------------- Controls ---------------- */
 
@@ -134,11 +162,6 @@ export function usePodcastWithInserts(
   const startMonitoring = () => {
     stopMonitoring();
 
-    let sorted: ScheduledInsert[] = [];
-    if (inserts) {
-      sorted = [...inserts].sort((a, b) => a.startTime - b.startTime);
-    }
-
     monitorRef.current = window.setInterval(() => {
       const podcast = podcastRef.current;
       const id = podcastIdRef.current;
@@ -147,16 +170,47 @@ export function usePodcastWithInserts(
 
       const t = podcast.seek(id) as number;
       setCurrentTime(t);
+      syncInsertIndexToTime(t);
 
-      let next: ScheduledInsert | null = null;
-      if (inserts) {
-        next = sorted[insertIndexRef.current];
+      let next: Insert | null = null;
+
+      if (sortedInsertsRef.current) {
+        next = sortedInsertsRef.current[insertIndexRef.current - 1];
       }
       if (!next) return;
 
-      if (t >= next.startTime && !insertPlayingRef.current) {
-        playInsert(next);
+      const lastPlayedTime = playedInsertsTimeRef.current?.get(next.id) ?? -1;
+
+      if (
+        !insertPlayingRef.current &&
+        t >= next.startTime &&
+        t <= next.endTime &&
+        lastPlayedTime < next.startTime
+      ) {
+        console.log(
+          `[Insert Trigger] Playing insert: ${next.id}\n`,
+          `Current time: ${t.toFixed(2)}\n`,
+          `Insert start: ${next.startTime.toFixed(2)}, end: ${next.endTime.toFixed(2)}\n`,
+          `Last played time: ${lastPlayedTime.toFixed(2)}\n`,
+          `InsertPlaying: ${insertPlayingRef.current}\n`
+        );
+
+        playedInsertsTimeRef.current?.set(next.id, t); // mark as played at this time
         insertIndexRef.current++;
+        playInsert(next);
+
+        console.log(
+          `[Insert Trigger] Insert ${next.id} marked as played at ${t.toFixed(2)}\n`
+        );
+      } else {
+        console.log(
+          `[Insert Skip] ${next.id}\n`,
+          `Current time: ${t.toFixed(2)}\n`,
+          `InsertPlaying: ${insertPlayingRef.current}\n`,
+          `Last played: ${lastPlayedTime.toFixed(2)}\n`,
+          `Insert window: ${next.startTime.toFixed(2)} - ${next.endTime.toFixed(2)}\n`,
+          `Will play? ${!insertPlayingRef.current && t >= next.startTime && t <= next.endTime && lastPlayedTime < next.startTime}\n`
+        );
       }
     }, 110);
   };
@@ -170,7 +224,7 @@ export function usePodcastWithInserts(
 
   /* ---------------- Insert ---------------- */
 
-  const playInsert = async (insert: ScheduledInsert) => {
+  const playInsert = async (insert: Insert) => {
     const podcast = podcastRef.current;
     const id = podcastIdRef.current;
     if (!podcast || id === null) return;
@@ -194,6 +248,12 @@ export function usePodcastWithInserts(
         insertPlayingRef.current = false; // mark insert as finished
         podcast.seek(pausedSeekRef.current, id);
         podcast.play(id);
+
+        // Play next insert in queue
+        if (insertQueueRef.current.length > 0) {
+          const nextInsert = insertQueueRef.current.shift()!;
+          playInsert(nextInsert);
+        }
       },
       onplay: () => {
         insertPlayingRef.current = true; // mark insert as playing
@@ -220,6 +280,7 @@ export function usePodcastWithInserts(
     insertRef.current = null;
     podcastIdRef.current = null;
     insertPlayingRef.current = false;
+    playedInsertsTimeRef.current?.clear();
   };
 
   useEffect(() => cleanup, []);

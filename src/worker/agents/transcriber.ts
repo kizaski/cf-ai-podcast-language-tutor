@@ -51,6 +51,23 @@ export class Transcriber extends Agent<Env, TranscriberState> {
     await this.runPipeline(connection, audioKey);
   }
 
+  onError(connection: Connection, error?: any) {
+    console.error(error);
+    // connection.send(JSON.stringify({ type: "error", error: error }));
+  }
+
+  onException(connection: Connection, error?: any) {
+    console.error(error);
+    // connection.send(JSON.stringify({ type: "error", error: error }));
+  }
+
+  private sendError(connection: Connection, message: string, details?: any) {
+    console.error(message, details);
+    connection.send(
+      JSON.stringify({ type: "error", message, details: details?.toString() })
+    );
+  }
+
   async runPipeline(connection: Connection, audioKey: string) {
     const db = this.ctx.storage.sql;
     let existing;
@@ -65,11 +82,15 @@ export class Transcriber extends Agent<Env, TranscriberState> {
     console.log("Existing transcript status:", existing?.status);
     if (existing?.status === "complete") {
       console.log("Streaming cached data for audioKey:", audioKey);
-      return this.streamCachedData(connection, audioKey);
+      return this.streamCachedData(connection, audioKey).catch((err) => {
+        this.sendError(connection, "Transcription pipeline failed", err);
+      });
     }
 
     console.log("Processing new transcription for audioKey:", audioKey);
-    this.processNewTranscription(connection, audioKey);
+    this.processNewTranscription(connection, audioKey).catch((err) => {
+      this.sendError(connection, "Transcription pipeline failed", err);
+    });
   }
 
   private async streamCachedData(connection: Connection, audioKey: string) {
@@ -115,6 +136,12 @@ export class Transcriber extends Agent<Env, TranscriberState> {
 
     for await (const result of this.transcribe(audioKey)) {
       if (!result) return;
+
+      if ("error" in result) {
+        this.sendError(connection, "Transcription chunk error", result.error);
+        continue;
+      }
+
       console.log("Transcription chunk received:", result.text?.slice(0, 50));
       const phrases = extractPhrases(result.words as Word[]);
 
@@ -180,9 +207,10 @@ export class Transcriber extends Agent<Env, TranscriberState> {
           connection.send(JSON.stringify({ type: "insert", insert }));
         });
       })
-      .catch((e) =>
-        console.error("Background insert task finished with error:", e)
-      )
+      .catch((err) => {
+        console.error("Background insert task finished with error:", err);
+        this.sendError(connection, "Background insert failed", err);
+      })
       .finally(() => {
         console.log("Background insert task complete for chunk:", chunk.id);
         this.activeInsertTasks.delete(task);
@@ -458,7 +486,7 @@ Constraints:
    */
   async *transcribe(
     audioKey: string
-  ): AsyncGenerator<Ai_Cf_Openai_Whisper_Output | undefined> {
+  ): AsyncGenerator<Ai_Cf_Openai_Whisper_Output | undefined | { error: any }> {
     const chunks = await this.getAudioChunks(audioKey);
 
     let accumulatedSegments: Phrase[] = [];
@@ -469,9 +497,15 @@ Constraints:
       const chunk = chunks[i];
 
       let lastWordTimestamp = 0;
-      const result = await this.transcribeChunk(chunk);
+      let result;
+      try {
+        result = await this.transcribeChunk(chunk);
+      } catch (err) {
+        yield { error: err };
+        continue;
+      }
 
-      if (result && result.words?.length) {
+      if (result && "words" in result && result.words?.length) {
         const normalizedWords = result.words
           .filter(
             (w): w is Word =>
@@ -512,7 +546,7 @@ Constraints:
 
   async transcribeChunk(
     chunkBuffer: ArrayBuffer
-  ): Promise<Ai_Cf_Openai_Whisper_Output | undefined> {
+  ): Promise<Ai_Cf_Openai_Whisper_Output | undefined | { error: any }> {
     console.log(
       "Transcribing raw audio chunk of size:",
       chunkBuffer.byteLength
@@ -532,7 +566,9 @@ Constraints:
       });
     } catch (error) {
       console.error(error);
-      // TODO -- send error
+      console.log(typeof error);
+
+      return { error: error };
     }
   }
 }

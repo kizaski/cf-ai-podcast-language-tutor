@@ -35,6 +35,10 @@ export const AudioPlayerPanel = ({
         if (data.type === "insert-complete") {
           console.log("All inserts generated");
         }
+        if (data.type === "error") {
+          // TODO -- UI
+          console.warn(`Error received from backend: ${data.message}`);
+        }
         return prev;
       });
     },

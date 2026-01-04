@@ -23,24 +23,37 @@ export const AudioPlayerPanel = ({
     query: { audioKey: initialData.episode.id },
     onMessage: (message) => {
       const data = JSON.parse(message.data);
-      setEpisodeData!((prev) => {
-        if (!prev) return prev;
+      switch (data.type) {
+        case "transcript":
+          setEpisodeData!((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              transcript: [...prev.transcript, data.transcript]
+            };
+          });
+          break;
+        case "transcript-status":
+          // TODO -- UI
+          console.log(data.progress);
+          break;
 
-        if (data.type === "transcript") {
-          return { ...prev, transcript: [...prev.transcript, data.transcript] };
-        }
-        if (data.type === "insert") {
-          return { ...prev, inserts: [...prev.inserts, data.insert] };
-        }
-        if (data.type === "insert-complete") {
+        case "insert":
+          setEpisodeData!((prev) => {
+            if (!prev) return prev;
+            return { ...prev, inserts: [...prev.inserts, data.insert] };
+          });
+          break;
+        case "insert-complete":
           console.log("All inserts generated");
-        }
-        if (data.type === "error") {
+          break;
+        case "error":
           // TODO -- UI
           console.warn(`Error received from backend: ${data.message}`);
-        }
-        return prev;
-      });
+          break;
+        default:
+          break;
+      }
     },
     onOpen: () => console.log("WS connected [transcriber]"),
     onClose: () => console.log("WS closed [transcriber]")

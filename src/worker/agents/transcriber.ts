@@ -134,6 +134,15 @@ export class Transcriber extends Agent<Env, TranscriberState> {
     let currentBuffer: TranscriptSegment[] = [];
     let currentWordCount = 0;
 
+    let transcriptionProgress = 0;
+    connection.send(
+      JSON.stringify({
+        type: "transcript-status",
+        status: "transcribing",
+        progress: transcriptionProgress
+      })
+    );
+
     for await (const result of this.transcribe(audioKey)) {
       if (!result) return;
 
@@ -141,6 +150,8 @@ export class Transcriber extends Agent<Env, TranscriberState> {
         this.sendError(connection, "Transcription chunk error", result.error);
         continue;
       }
+
+      transcriptionProgress += (100 - transcriptionProgress) * 0.1;
 
       console.log("Transcription chunk received:", result.text?.slice(0, 50));
       const phrases = extractPhrases(result.words as Word[]);
@@ -167,6 +178,15 @@ export class Transcriber extends Agent<Env, TranscriberState> {
           currentWordCount = 0;
         }
       }
+
+      transcriptionProgress++;
+      connection.send(
+        JSON.stringify({
+          type: "transcript-status",
+          status: "transcribing",
+          progress: transcriptionProgress
+        })
+      );
     }
 
     if (currentBuffer.length > 0) {

@@ -88,8 +88,9 @@ export async function handleAudioUpload(
     const lastDotIndex = fileName.lastIndexOf(".");
     const fileNameNoExt =
       lastDotIndex === -1 ? fileName : fileName.slice(0, lastDotIndex);
+    const id = crypto.randomUUID();
 
-    await env.R2_AUDIO_BUCKET.put(fileNameNoExt, arrayBuffer, {
+    await env.R2_AUDIO_BUCKET.put(id, arrayBuffer, {
       httpMetadata: {
         contentType: file.type
       }
@@ -97,7 +98,7 @@ export async function handleAudioUpload(
 
     // Create episode object
     const episode: Episode = {
-      id: fileNameNoExt,
+      id: id,
       title: fileNameNoExt,
       duration: 0, // can be calculated later
       audioUrl: "/api/r2/" + fileNameNoExt,

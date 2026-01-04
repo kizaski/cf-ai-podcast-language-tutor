@@ -16,10 +16,12 @@ export async function handleAudioQuery(
       });
     }
 
+    const title = object.customMetadata?.title ?? "Untitled episode";
+
     // Build episode metadata
     const episode: Episode = {
       id: episodeId,
-      title: episodeId,
+      title: title,
       duration: 0, // can be calculated
       audioUrl: episodeId,
       publishedDate: new Date().toISOString(),
@@ -93,6 +95,9 @@ export async function handleAudioUpload(
     await env.R2_AUDIO_BUCKET.put(id, arrayBuffer, {
       httpMetadata: {
         contentType: file.type
+      },
+      customMetadata: {
+        title: fileNameNoExt
       }
     });
 
@@ -101,7 +106,7 @@ export async function handleAudioUpload(
       id: id,
       title: fileNameNoExt,
       duration: 0, // can be calculated later
-      audioUrl: "/api/r2/" + fileNameNoExt,
+      audioUrl: "/api/r2/" + id,
       publishedDate: new Date().toISOString(),
       description: ""
     };

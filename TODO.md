@@ -1,8 +1,6 @@
 ## TODO -- To-fix  
 
 ### Inserts / Playback Issues
-- Inserts cause browser lag and high memory usage
-- Inserts streamed from backend stop playing podcast 
 - IMPORTANT: newly enabled (during playback) Inserts dont play (no matter where in playback)  
 
 ### Episodes / UI Fixes

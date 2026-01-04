@@ -24,20 +24,6 @@ export default {
       isNewSession = true;
     }
 
-    // Rewrite URL for agent routing dynamically
-    const agentUrl = new URL(request.url);
-    const originalPath = agentUrl.pathname.replace(/^\/+/, ""); // remove leading slash
-
-    // Extract segments from path
-    const segments = originalPath.split("/");
-
-    // Assume the first segment is the agent type and the last segment is the action
-    const agentType = segments[1] ?? "default"; // fallback if missing
-    const lastSegment = segments.pop() ?? ""; // last segment of the path
-
-    // Build new path dynamically
-    agentUrl.pathname = `/agents/${agentType}/${sessionId}/${lastSegment}`;
-
     if (url.pathname.startsWith("/api/episodes/")) {
       const parts = url.pathname.split("/"); // ["", "api", "episodes", ...]
       const lastPart = decodeURIComponent(parts[parts.length - 1]);
@@ -64,10 +50,8 @@ export default {
       }
     }
 
-    const agentRequest = new Request(agentUrl.toString(), request);
-
     let response =
-      (await routeAgentRequest(agentRequest, env)) ??
+      (await routeAgentRequest(request, env)) ??
       (await env.ASSETS.fetch(request)) ??
       new Response("Not found", { status: 404 });
 

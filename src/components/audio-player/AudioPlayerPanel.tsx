@@ -19,7 +19,7 @@ export const AudioPlayerPanel = ({
   const { sessionId } = useSession();
   useAgent({
     agent: "transcriber",
-    name: sessionId,
+    name: `${initialData.episode.id}:${sessionId}`,
     query: { audioKey: initialData.episode.id },
     onMessage: (message) => {
       const data = JSON.parse(message.data);

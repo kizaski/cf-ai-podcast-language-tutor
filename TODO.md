@@ -11,9 +11,6 @@
 - Move runPipeline in Transciber from onConnect to method, call it conditionally  
 - In Transcriber onClose - stop all jobs  
 
-### Chat / Data
-- IMPORTANT: Make Chat unique by Episode  
-
 ---
 
 ## TODO -- enhance  

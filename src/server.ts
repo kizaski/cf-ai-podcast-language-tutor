@@ -1,5 +1,4 @@
 import { routeAgentRequest } from "agents";
-import { getSessionId } from "./utils";
 import {
   handleAudioUpload,
   handleAudioQuery
@@ -8,6 +7,7 @@ import {
 import { handleR2Query } from "./worker/api/r2";
 import { Chat } from "./worker/agents/chat";
 import { Transcriber } from "./worker/agents/transcriber";
+import { getSessionId } from "./utils";
 
 // Needed re-exports (or script_name in wrangler)
 export { Chat };

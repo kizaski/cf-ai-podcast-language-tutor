@@ -9,9 +9,20 @@ import { useState } from "react";
 // NOTE: this should match the tools that don't have execute functions in tools.ts
 const toolsRequiringConfirmation: (keyof typeof tools)[] = [];
 
-export function useChatAgent({ sessionId }: { sessionId: string }) {
+export function useChatAgent({
+  sessionId,
+  episodeId
+}: {
+  sessionId: string;
+  episodeId: string | undefined;
+}) {
   const [agentInput, setAgentInput] = useState("");
-  const agent = useAgent({ agent: "chat", name: sessionId! });
+  console.log(`${episodeId}:${sessionId}`);
+
+  const agent = useAgent({
+    agent: "chat",
+    name: episodeId ? `${episodeId}:${sessionId}` : sessionId
+  });
   // TODO -- define schema for extraData in UIMessage<any>
   const chat = useAgentChat<unknown, UIMessage<any>>({
     agent,

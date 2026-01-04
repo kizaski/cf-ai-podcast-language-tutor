@@ -38,7 +38,7 @@ export function ChatView({
     handleAgentInputChange,
     handleAgentSubmit,
     agentInput
-  } = useChatAgent({ sessionId });
+  } = useChatAgent({ sessionId, episodeId });
 
   const endRef = useAutoScroll([messages]);
   const textarea = useTextareaAutoResize();

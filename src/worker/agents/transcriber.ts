@@ -101,21 +101,16 @@ export class Transcriber extends Agent<Env, TranscriberState> {
       FROM segments WHERE audioKey = ${audioKey} ORDER BY startTime ASC`;
 
     console.log(`Streaming ${segments.length} cached segments`);
-    for (const segment of segments) {
-      connection.send(
-        JSON.stringify({ type: "transcript", transcript: segment })
-      );
-    }
+    segments.forEach((s) =>
+      connection.send(JSON.stringify({ type: "transcript", transcript: s }))
+    );
 
-    const chunks = this.chunkTranscript(segments);
-    console.log(`Streaming inserts in ${chunks.length} chunks`);
-    for (const chunk of chunks) {
-      const inserts = await this.getOrGenerateInserts(audioKey, chunk);
-      inserts.forEach((insert) => {
-        console.log("Streaming cached insert:", insert.id);
-        connection.send(JSON.stringify({ type: "insert", insert }));
-      });
-    }
+    const inserts = this
+      .sql<Insert>`SELECT * FROM inserts WHERE audioKey = ${audioKey} ORDER BY startTime ASC`;
+    console.log(`Streaming ${inserts.length} cached inserts`);
+    inserts.forEach((i) =>
+      connection.send(JSON.stringify({ type: "insert", insert: i }))
+    );
 
     console.log("All inserts streamed");
     connection.send(JSON.stringify({ type: "insert-complete" }));

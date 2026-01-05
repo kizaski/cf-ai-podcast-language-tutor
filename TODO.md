@@ -19,7 +19,7 @@
 - Add password protection for access to dynamic generation (excluding samples)  
 
 ### Inserts / Transcript Enhancements
-- IMPORTANT: Add loading indicator for inserts and transcript generation (connection.send type: transcript-status)  
+- IMPORTANT: Add loading indicator for inserts and transcript generation (connection.send type: transcript-status) <-- 
 - Resume insert and transcript generation  
 - Add transcript of inserts in UI  
 - Sort takeaway/summary insert before primer  
@@ -50,7 +50,7 @@
 - Enhance system prompt with optional explanations IF user is not writing in English/native lang (with the help of an llm or API) 
 
 ### Samples / Generation / Tools
-- IMPORTANT: Add samples  
+- IMPORTANT: Add samples - cached: set up, non-cached TODO 
 - For samples: one which generates them and hasnt cached inserts and transcript - to show generation  
 - IMP: crypto UUID in URL  
 - Add optional podcast search tool using the Podwise API  

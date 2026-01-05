@@ -69,12 +69,13 @@ export class Transcriber extends Agent<Env, TranscriberState> {
   }
 
   async runPipeline(connection: Connection, audioKey: string) {
-    const db = this.ctx.storage.sql;
     let existing;
     try {
-      existing = db
-        .exec("SELECT status FROM transcripts WHERE audioKey = ?", audioKey)
-        .one() as { status: string } | undefined;
+      existing = this.sql<{
+        status: string;
+      }>`SELECT status
+      FROM transcripts 
+      WHERE audioKey = ${audioKey}`[0];
     } catch (error) {
       console.log(error);
     }
@@ -83,7 +84,7 @@ export class Transcriber extends Agent<Env, TranscriberState> {
     if (existing?.status === "complete") {
       console.log("Streaming cached data for audioKey:", audioKey);
       return this.streamCachedData(connection, audioKey).catch((err) => {
-        this.sendError(connection, "Transcription pipeline failed", err);
+        this.sendError(connection, "Failed streaming cached data", err);
       });
     }
 

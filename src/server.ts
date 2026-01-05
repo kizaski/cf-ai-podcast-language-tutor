@@ -43,28 +43,16 @@ export default {
 
     if (url.pathname.startsWith("/api/episodes/")) {
       const parts = url.pathname.split("/"); // ["", "api", "episodes", ...]
-      const lastPart = decodeURIComponent(parts[parts.length - 1]);
+      let epIdOrAction = decodeURIComponent(parts[3]);
 
       // POST /api/episodes/upload-audio
-      if (request.method === "POST" && lastPart === "upload-audio") {
+      if (request.method === "POST" && epIdOrAction === "upload-audio") {
         return handleAudioUpload(request, env, sessionId, ctx);
       }
 
       // GET /api/episodes/:id
       if (request.method === "GET" && parts.length === 4) {
-        // const episodeId = parts[3];
-        return handleAudioQuery(request, env, lastPart);
-      }
-
-      // GET /api/episodes/:id/inserts-stream
-      if (
-        request.method === "GET" &&
-        parts.length === 5 &&
-        parts[4] === "inserts-stream"
-      ) {
-        const episodeId = parts[3];
-        return new Response("Unimplemented", { status: 405 });
-        // return handleInsertsStream(request, env, episodeId);
+        return handleAudioQuery(request, env, epIdOrAction);
       }
     }
 

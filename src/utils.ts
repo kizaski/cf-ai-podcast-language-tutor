@@ -11,6 +11,7 @@ import { APPROVAL } from "./shared";
 import { parseBuffer } from "music-metadata";
 import type { Phrase, Word } from "./types/audio-types";
 import { toolKeywordRules } from "./tools";
+import type { EpisodeData } from "@/types/audio-types";
 
 export function setupDatabase(sql: SqlStorage) {
   // Create tables if they don't exist
@@ -391,4 +392,36 @@ export function getSessionId(request: Request): string | null {
   }
 
   return null;
+}
+
+export function getSampleEpisodes(): EpisodeData[] {
+  const now = new Date().toISOString();
+
+  const sample1: EpisodeData = {
+    episode: {
+      id: "sample-1",
+      title: "Sample Episode One",
+      duration: 0,
+      audioUrl: "/api/r2/sample-1",
+      publishedDate: now,
+      description: "This is a sample episode for testing."
+    },
+    inserts: [],
+    transcript: []
+  };
+
+  const sample2: EpisodeData = {
+    episode: {
+      id: "sample-2",
+      title: "Sample Episode Two",
+      duration: 0,
+      audioUrl: "/api/r2/sample-2",
+      publishedDate: now,
+      description: "Another sample episode."
+    },
+    inserts: [],
+    transcript: []
+  };
+
+  return [sample1, sample2];
 }

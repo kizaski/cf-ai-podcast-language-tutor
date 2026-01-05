@@ -2,6 +2,7 @@ import { Card } from "@/components/card/Card";
 import { Robot } from "@phosphor-icons/react";
 import { useRef } from "react";
 import { useEpisode } from "@/hooks/useEpisode";
+import { useNavigate } from "react-router-dom";
 
 export function EmptyState({ audioFile }: any) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -13,6 +14,7 @@ export function EmptyState({ audioFile }: any) {
     isLoading,
     progress
   } = useEpisode();
+  const navigate = useNavigate();
 
   return (
     <div className="h-full w-full flex items-center justify-center">
@@ -76,15 +78,39 @@ export function EmptyState({ audioFile }: any) {
             <ul className="text-sm space-y-2">
               <li className="flex items-center gap-2">
                 <span className="text-[#F48120]">•</span>
-                <span>Sample 1</span>
+                <span>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/episodes/sample-1")}
+                    className="text-sm p-1 outline outline-amber-600 cursor-pointer rounded-lg"
+                  >
+                    Sample 1
+                  </button>
+                </span>
               </li>
               <li className="flex items-center gap-2">
                 <span className="text-[#F48120]">•</span>
-                <span>Sample 2</span>
+                <span>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/episodes/sample-2")}
+                    className="text-sm p-1 outline outline-amber-600 cursor-pointer rounded-lg"
+                  >
+                    Sample 2
+                  </button>
+                </span>
               </li>
               <li className="flex items-center gap-2">
                 <span className="text-[#F48120]">•</span>
-                <span>Sample 3</span>
+                <span>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/episodes/sample-3")}
+                    className="text-sm p-1 outline outline-amber-600 cursor-pointer rounded-lg"
+                  >
+                    Sample 3
+                  </button>
+                </span>
               </li>
             </ul>
           </div>

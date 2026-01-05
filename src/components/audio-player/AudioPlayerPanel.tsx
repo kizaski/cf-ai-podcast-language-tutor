@@ -16,11 +16,10 @@ export const AudioPlayerPanel = ({
 }: AudioPlayerPanelProps) => {
   if (!initialData) return <EmptyAudioPlayer />;
 
-  const { sessionId } = useSession();
   useAgent({
     agent: "transcriber",
-    name: `${initialData.episode.id}:${sessionId}`,
-    query: { audioKey: initialData.episode.id },
+    name: `${initialData.episode.id}`,
+    query: { audioKey: initialData.episode.id }, // TODO -- rm
     onMessage: (message) => {
       const data = JSON.parse(message.data);
       switch (data.type) {

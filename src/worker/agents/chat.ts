@@ -52,7 +52,7 @@ export class Chat extends AIChatAgent<Env> {
       })
     );
 
-    const transcriberStub = env.Transcriber.getByName(this.name);
+    const transcriberStub = env.Transcriber.getByName(this.name.split(":")[0]);
 
     const lastMessageWithTime = [...this.messages]
       .reverse()
@@ -79,8 +79,8 @@ export class Chat extends AIChatAgent<Env> {
 
     let fullTranscript = "No transcript available";
     try {
-      const fullTranscript = await transcriberStub.getTranscriptWindowText(
-        currentTime,
+      fullTranscript = await transcriberStub.getTranscriptWindowText(
+        currentTime!,
         60
       );
       console.log(fullTranscript);

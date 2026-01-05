@@ -47,7 +47,7 @@ export function ChatInput({
             ref={fileInputRef}
             type="file"
             multiple
-            hidden
+            className="hidden"
             onChange={async (e) => {
               await onFileChange(e);
 

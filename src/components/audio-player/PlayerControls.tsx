@@ -42,7 +42,7 @@ export const PlayerControls = ({
   };
 
   return (
-    <div className="bg-neutral-100 dark:bg-neutral-800 rounded-lg p-6 mb-6">
+    <div className="bg-neutral-100 dark:bg-neutral-800 rounded-lg p-6 mb-3">
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="flex items-center gap-3">
@@ -75,7 +75,7 @@ export const PlayerControls = ({
           )}
           {!hasLoaded && !isLoading && (
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-              Audio not loaded. Click play to load.
+              Audio not loaded. Try refreshing the page.
             </p>
           )}
         </div>

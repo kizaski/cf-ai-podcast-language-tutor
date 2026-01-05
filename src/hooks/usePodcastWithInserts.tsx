@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Howl } from "howler";
 import type { Insert } from "@/types/audio-types";
+import { usePodcastPlaybackState } from "@/stores/usePlaybackstate";
 
 export const usePodcastWithInserts = (
   podcastUrl: string,
@@ -8,6 +9,13 @@ export const usePodcastWithInserts = (
 ) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+  const setCurrentTimeStore = usePodcastPlaybackState(
+    (state) => state.setCurrentTime
+  );
+  const setIsPlayingStore = usePodcastPlaybackState(
+    (state) => state.setIsPlaying
+  );
+
   const [volume, setVolume] = useState(1);
   const [duration, setDuration] = useState(1);
 
@@ -17,6 +25,12 @@ export const usePodcastWithInserts = (
   const activeInsertIdRef = useRef<string | null>(null);
   const isInsertPlayingRef = useRef(false);
   const isSeekingRef = useRef(false);
+
+  useEffect(() => {
+    setCurrentTimeStore(currentTime);
+    setIsPlayingStore(isPlaying);
+    return () => {};
+  }, [currentTime, isPlaying]);
 
   // Initialize podcast Howl
   useEffect(() => {

@@ -35,7 +35,7 @@ export class Transcriber extends Agent<Env, TranscriberState> {
   async onConnect(connection: Connection, ctx: ConnectionContext) {
     console.log("Client connected:", connection.url);
     const url = new URL(connection.url || ctx.request?.url || "");
-    const audioKey = url.searchParams.get("audioKey");
+    const audioKey = url.searchParams.get("audioKey"); // TODO -- rm?
 
     if (!audioKey) {
       console.warn("audioKey missing, closing connection");
@@ -333,13 +333,13 @@ export class Transcriber extends Agent<Env, TranscriberState> {
    * Fetches transcript segments within a window relative to targetTime
    */
   async getTranscriptWindowText(
-    targetTime: number | null,
+    targetTime: number,
     windowSeconds: number = 10
-  ): Promise<string | null> {
+  ): Promise<string> {
     const audioKey = this.state.audioKey;
-    if (!audioKey) return null;
+    if (!audioKey) return "No transcript available.";
 
-    if (!targetTime) return null;
+    if (targetTime < 0) return "No transcript available.";
 
     const start = targetTime - windowSeconds;
     const end = targetTime + windowSeconds;
@@ -358,7 +358,7 @@ export class Transcriber extends Agent<Env, TranscriberState> {
       )
       .toArray() as { text: string; startTime: number }[];
 
-    if (segments.length === 0) return null;
+    if (segments.length === 0) return "No transcript available.";
 
     return segments
       .map((s) => `[${s.startTime.toFixed(1)}s]: ${s.text}`)

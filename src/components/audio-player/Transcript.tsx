@@ -16,8 +16,8 @@ export const Transcript = ({
 }: TranscriptProps) => {
   return (
     <div>
-      <h3 className="text-lg font-semibold mb-4">Transcript</h3>
-      <div className="space-y-3">
+      <h3 className="text-lg font-semibold mb-3">Transcript</h3>
+      <div className="space-y-3 h-52 overflow-scroll rounded-lg">
         {segments.map((segment, idx) => {
           const hasInsert = inserts.some(
             (insert) =>
@@ -52,9 +52,6 @@ export const Transcript = ({
                     </span>
                   )}
                 </div>
-                <button className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition">
-                  ̶+̶ ̶I̶n̶s̶e̶r̶t̶ ̶H̶e̶r̶e̶
-                </button>
               </div>
               <p className="text-neutral-700 dark:text-neutral-300">
                 {segment.text}

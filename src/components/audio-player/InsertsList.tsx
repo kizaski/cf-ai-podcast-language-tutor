@@ -19,8 +19,8 @@ export const InsertsList = ({
   onSeek
 }: InsertsListProps) => {
   return (
-    <div className="mb-8">
-      <div className="flex items-center justify-between mb-4">
+    <div className="mb-3">
+      <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg font-semibold">Inserts ({inserts.length})</h3>
         <button
           onClick={onToggleInserts}
@@ -37,7 +37,7 @@ export const InsertsList = ({
         </button>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-3 h-44 overflow-scroll rounded-lg">
         {inserts
           .sort((a: Insert, b: Insert) => a.startTime - b.startTime)
           .map((insert, idx) => (

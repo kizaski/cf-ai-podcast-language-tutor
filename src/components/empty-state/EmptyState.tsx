@@ -26,7 +26,14 @@ export function EmptyState({ audioFile }: any) {
 
           <h3 className="font-semibold text-lg">Welcome to Podcast Tutor</h3>
 
-          {/* TODO -- instructions */}
+          <h2 className="mb-2">
+            <div className="mb-2">Learn any language through podcasts</div>
+            <div className="text-muted-foreground text-sm mb-2">
+              Listen, get real-time explanations + inserted audio clip primers,
+              and build your vocabulary. All while enjoying the original
+              podcast.
+            </div>
+          </h2>
 
           <div className="">
             <p className="text-muted-foreground text-sm mb-2">
@@ -71,7 +78,7 @@ export function EmptyState({ audioFile }: any) {
             <progress className="w-full" value={progress} max={100} />
           )}
 
-          <div className="pt-4 border-t text-left">
+          <div className="pt-4 border-t border-amber-700 text-left">
             <p className="text-muted-foreground text-sm mb-2">
               Or try a sample:
             </p>

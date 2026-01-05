@@ -16,7 +16,27 @@ export const Transcript = ({
 }: TranscriptProps) => {
   return (
     <div>
-      <h3 className="text-lg font-semibold mb-3">Transcript</h3>
+      <h3 className="text-lg font-semibold mb-3 flex flex-wrap">
+        <div>Transcript</div>
+        {/* TODO -- scroll to current transcript line */}
+        {/* <button
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+          className="text-xs p-2 py-1 mx-2 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition"
+        >
+          Now
+        </button> */}
+        {/* TODO -- button for expanding (add to inserts as well) */}
+        {/* <button
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+          className="text-xs p-2 py-1 mx-2 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition"
+        >
+          Now
+        </button> */}
+      </h3>
       <div className="space-y-3 h-52 overflow-scroll rounded-lg">
         {segments.map((segment, idx) => {
           const hasInsert = inserts.some(

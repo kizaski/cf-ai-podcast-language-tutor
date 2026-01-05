@@ -1,6 +1,6 @@
 import { MessageItem } from "./MessageItem";
-import { EmptyState } from "./EmptyState";
 import { formatTime } from "@/lib/utils";
+import { EmptyChatState } from "./EmptyChatState";
 
 export function MessageList({
   messages,
@@ -10,9 +10,7 @@ export function MessageList({
   toolsRequiringConfirmation,
   audioFile
 }: any) {
-  if (!messages.length) return <EmptyState audioFile={audioFile} />;
-
-  // TODO -- if on episodes page return EmptyInEpisodesState
+  if (!messages.length) return <EmptyChatState />;
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24 max-h-[calc(100vh-10rem)]">

@@ -62,7 +62,7 @@ export function ChatInput({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center justify-center gap-2 text-sm font-medium bg-secondary text-secondary-foreground hover:bg-secondary/90 rounded-full p-1.5 h-fit border border-neutral-200 dark:border-neutral-800"
+              className="inline-flex cursor-pointer items-center justify-center gap-2 text-sm font-medium bg-secondary text-secondary-foreground hover:bg-secondary/90 rounded-full p-1.5 h-fit border border-neutral-200 dark:border-neutral-800"
               aria-label="Upload files"
             >
               📎

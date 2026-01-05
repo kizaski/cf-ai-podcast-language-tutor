@@ -1,7 +1,8 @@
-import type { PlaybackState, Insert } from "@/types/audio-types";
+import type { PlaybackState, Insert, EpisodeData } from "@/types/audio-types";
 import { formatTime } from "@/lib/utils";
 
 interface PlayerControlsProps {
+  episodeData: EpisodeData;
   playbackState: PlaybackState;
   onPlayPause: () => void;
   onSeek: (time: number) => void;
@@ -18,6 +19,7 @@ interface PlayerControlsProps {
 }
 
 export const PlayerControls = ({
+  episodeData,
   playbackState,
   onPlayPause,
   onSeek,
@@ -43,7 +45,17 @@ export const PlayerControls = ({
     <div className="bg-neutral-100 dark:bg-neutral-800 rounded-lg p-6 mb-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-lg font-semibold">Current Playback</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-semibold">
+              {episodeData.episode.title}
+            </h2>
+
+            {hasLoaded && (
+              <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded">
+                Loaded
+              </span>
+            )}
+          </div>
           <p className="text-sm text-neutral-600 dark:text-neutral-400">
             {formatTime(playbackState.currentTime)} /{" "}
             {formatTime(playbackState.duration)}
@@ -68,19 +80,6 @@ export const PlayerControls = ({
           )}
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={onToggleInserts}
-            className={`px-3 py-2 rounded-lg transition ${
-              playbackState.activeInserts.length > 0
-                ? "bg-blue-600 text-white"
-                : "bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300"
-            } ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
-            disabled={isLoading}
-          >
-            {playbackState.activeInserts.length > 0
-              ? "Inserts On"
-              : "Inserts Off"}
-          </button>
           {onStop && (
             <button
               onClick={onStop}

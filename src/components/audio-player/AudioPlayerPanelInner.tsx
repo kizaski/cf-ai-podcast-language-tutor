@@ -95,29 +95,8 @@ export const AudioPlayerPanelInner = ({
       ) : (
         <div className="flex-1 overflow-y-auto">
           <div className="p-6">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h1 className="text-2xl font-bold">
-                  {episodeData.episode.title}
-                </h1>
-                <p className="text-neutral-600 dark:text-neutral-400">
-                  {episodeData.episode.description}
-                </p>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded">
-                    Howler Playback
-                  </span>
-                  {hasLoaded && (
-                    <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded">
-                      Loaded
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
             <PlayerControls
+              episodeData={episodeData}
               playbackState={playbackState}
               onPlayPause={handlePlayPause}
               onSeek={handleSeek}
@@ -134,8 +113,11 @@ export const AudioPlayerPanelInner = ({
             />
 
             <InsertsList
+              playbackState={playbackState}
               inserts={episodeData.inserts}
               onToggleInsert={handleToggleInsert}
+              onToggleInserts={handleToggleInserts}
+              isLoading={false}
               onSeek={handleSeek}
             />
 

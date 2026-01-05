@@ -1,13 +1,19 @@
-import type { Insert } from "@/types/audio-types";
+import type { Insert, PlaybackState } from "@/types/audio-types";
 import { formatTime, getInsertColor } from "@/lib/utils";
 
 interface InsertsListProps {
   inserts: Insert[];
+  playbackState: PlaybackState;
+  onToggleInserts: () => void;
+  isLoading: boolean;
   onToggleInsert: (id: string) => void;
   onSeek: (time: number) => void;
 }
 
 export const InsertsList = ({
+  playbackState,
+  onToggleInserts,
+  isLoading,
   inserts,
   onToggleInsert,
   onSeek
@@ -16,8 +22,18 @@ export const InsertsList = ({
     <div className="mb-8">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold">Inserts ({inserts.length})</h3>
-        <button className="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition">
-          ̶+̶ ̶A̶d̶d̶ ̶I̶n̶s̶e̶r̶t̶
+        <button
+          onClick={onToggleInserts}
+          className={`px-3 py-2 rounded-lg transition ${
+            playbackState.activeInserts.length > 0
+              ? "bg-blue-600 text-white"
+              : "bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300"
+          } ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
+          disabled={isLoading}
+        >
+          {playbackState.activeInserts.length > 0
+            ? "Inserts On"
+            : "Inserts Off"}
         </button>
       </div>
 

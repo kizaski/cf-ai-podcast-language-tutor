@@ -1,7 +1,7 @@
 import { useTheme } from "./hooks/useTheme";
 import { ChatView } from "./ChatView";
 import { useSession } from "./providers/SessionProvider";
-import { EmptyState } from "./components/chat/messages/EmptyState";
+import { EmptyState } from "./components/empty-state/EmptyState";
 import { useAudioFile } from "./hooks/useAudioFile";
 import { useParams } from "react-router-dom";
 

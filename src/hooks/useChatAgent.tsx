@@ -4,6 +4,7 @@ import { isToolUIPart } from "ai";
 import type { UIMessage } from "@ai-sdk/react";
 import type { tools } from "../tools";
 import { useState } from "react";
+import { useChatInputStore } from "@/stores/chatInputStore";
 
 // List of tools that require human confirmation
 // NOTE: this should match the tools that don't have execute functions in tools.ts
@@ -16,8 +17,9 @@ export function useChatAgent({
   sessionId: string;
   episodeId: string | undefined;
 }) {
-  const [agentInput, setAgentInput] = useState("");
-  console.log(`${episodeId}:${sessionId}`);
+  const agentInput = useChatInputStore((s) => s.agentInput);
+  const setAgentInput = useChatInputStore((s) => s.setAgentInput);
+  const clearAgentInput = useChatInputStore((s) => s.clearAgentInput);
 
   const agent = useAgent({
     agent: "chat",
@@ -54,9 +56,7 @@ export function useChatAgent({
     if (!agentInput.trim()) return;
 
     const message = agentInput;
-    setAgentInput("");
-
-    console.log(extraData);
+    clearAgentInput();
 
     // Send message to agent
     await chat.sendMessage({
@@ -71,6 +71,7 @@ export function useChatAgent({
     pendingToolConfirmation,
     toolsRequiringConfirmation,
     agentInput,
+    setAgentInput,
     handleAgentInputChange,
     handleAgentSubmit
   };

@@ -81,7 +81,7 @@ export class Chat extends AIChatAgent<Env> {
     try {
       fullTranscript = await transcriberStub.getTranscriptWindowText(
         currentTime!,
-        60
+        30
       );
       console.log(fullTranscript);
     } catch (error) {

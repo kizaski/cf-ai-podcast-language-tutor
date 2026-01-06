@@ -55,7 +55,7 @@ export const AudioPlayerPanel = ({
                 return type; // fallback if something else appears
               };
 
-              const typeOrder = { intro: 0, outro: 1 };
+              const typeOrder = { intro: 1, outro: 0 };
 
               return (
                 typeOrder[normalizeType(a.type)] -

@@ -146,8 +146,12 @@ export const PlayerControls = ({
 
         {/* Audio Controls */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-sm">Speed:</span>
+          <div className="flex-1"></div>
+          {/*<div className="flex items-center gap-2">
+            <span></span>
+            <span></span>
+
+             <span className="text-sm">Speed:</span>
             <select
               value={playbackState.playbackRate}
               onChange={(e) => onPlaybackRateChange(parseFloat(e.target.value))}
@@ -160,8 +164,8 @@ export const PlayerControls = ({
               <option value="1.25">1.25x</option>
               <option value="1.5">1.5x</option>
               <option value="2">2x</option>
-            </select>
-          </div>
+            </select> 
+          </div>*/}
 
           <div className="flex gap-4">
             <button
@@ -191,7 +195,7 @@ export const PlayerControls = ({
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-1 items-center gap-2 justify-end">
             <span className="text-sm">Volume:</span>
             <input
               type="range"

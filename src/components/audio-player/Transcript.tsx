@@ -46,7 +46,7 @@ export const Transcript = ({
         {/* TODO -- scroll to current transcript line */}
         <button
           onClick={() => {}}
-          className="rounded-lg px-3 py-2 text-md bg-blue-600 dark:bg-blue-800 text-white"
+          className="rounded-lg px-3 py-2 text-md bg-blue-600 text-white"
         >
           Now
         </button>

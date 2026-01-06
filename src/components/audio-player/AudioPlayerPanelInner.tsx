@@ -23,11 +23,20 @@ export const AudioPlayerPanelInner = ({
     [episodeData.inserts]
   );
 
-  const { play, stop, seek, pause, isPlaying, currentTime, duration } =
-    usePodcastWithInserts(
-      `/api/r2/${episodeData.episode.audioUrl}`,
-      enabledInserts
-    );
+  const {
+    play,
+    stop,
+    seek,
+    pause,
+    setVolume,
+    volume,
+    isPlaying,
+    currentTime,
+    duration
+  } = usePodcastWithInserts(
+    `/api/r2/${episodeData.episode.audioUrl}`,
+    enabledInserts
+  );
 
   /* ---------------- Expand / Reset Inserts and Transcript ---------------- */
 
@@ -53,7 +62,7 @@ export const AudioPlayerPanelInner = ({
   const playbackState: PlaybackState = {
     isPlaying,
     currentTime,
-    volume: 1,
+    volume: volume,
     playbackRate: 1,
     duration,
     activeInserts: episodeData.inserts.filter((i) => i.enabled)
@@ -103,6 +112,10 @@ export const AudioPlayerPanelInner = ({
     });
   };
 
+  const handleVolumeChange = (val: number) => {
+    setVolume(val);
+  };
+
   /* ---------------- Render ---------------- */
 
   const hasLoaded = Boolean(episodeData.episode.audioUrl);
@@ -122,7 +135,7 @@ export const AudioPlayerPanelInner = ({
               onStop={handleStop}
               onSkipBackward={() => seek(currentTime - 15)}
               onSkipForward={() => seek(currentTime + 30)}
-              onVolumeChange={() => {}}
+              onVolumeChange={handleVolumeChange}
               onPlaybackRateChange={() => {}}
               onToggleInserts={handleToggleInserts}
               inserts={episodeData.inserts}

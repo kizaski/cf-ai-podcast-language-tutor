@@ -187,6 +187,8 @@ export const usePodcastWithInserts = (
     stop,
     seek,
     pause,
+    setVolume,
+    volume,
     isPlaying,
     currentTime,
     duration

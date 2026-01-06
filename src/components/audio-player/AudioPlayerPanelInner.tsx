@@ -125,8 +125,8 @@ export const AudioPlayerPanelInner = ({
       {!hasLoaded ? (
         <AudioLoadingState isLoading={false} hasLoaded={false} />
       ) : (
-        <div className="flex-1 overflow-y-visible">
-          <div className="p-6 h-[98vh]">
+        <div className="flex-1">
+          <div className="p-6 h-[94vh]">
             <PlayerControls
               episodeData={episodeData}
               playbackState={playbackState}

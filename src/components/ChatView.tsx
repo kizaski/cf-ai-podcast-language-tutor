@@ -1,15 +1,15 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { AudioPlayerPanel } from "./components/audio-player/AudioPlayerPanel";
-import { ChatHeader } from "./components/chat/ChatHeader";
-import { ChatInput } from "./components/chat/ChatInput";
-import { MessageList } from "./components/chat/messages/MessageList";
-import { useAudioFile } from "./hooks/useAudioFile";
-import { useAutoScroll } from "./hooks/useAutoScroll";
-import { useChatAgent } from "./hooks/useChatAgent";
-import { useEpisode } from "./hooks/useEpisode";
-import { useTextareaAutoResize } from "./hooks/useTextareaAutoResize";
-import { usePodcastPlaybackState } from "./stores/usePlaybackstate";
+import { AudioPlayerPanel } from "./audio-player/AudioPlayerPanel";
+import { ChatHeader } from "./chat/ChatHeader";
+import { ChatInput } from "./chat/ChatInput";
+import { MessageList } from "./chat/messages/MessageList";
+import { useAudioFile } from "@/hooks/useAudioFile";
+import { useAutoScroll } from "@/hooks/useAutoScroll";
+import { useChatAgent } from "@/hooks/useChatAgent";
+import { useEpisode } from "@/hooks/useEpisode";
+import { useTextareaAutoResize } from "@/hooks/useTextareaAutoResize";
+import { usePodcastPlaybackState } from "@/stores/usePlaybackstate";
 
 export function ChatView({
   sessionId,

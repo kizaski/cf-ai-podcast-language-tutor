@@ -1,5 +1,5 @@
 import { useTheme } from "./hooks/useTheme";
-import { ChatView } from "./ChatView";
+import { ChatView } from "./components/ChatView";
 import { useSession } from "./providers/SessionProvider";
 import { EmptyState } from "./components/empty-state/EmptyState";
 import { useAudioFile } from "./hooks/useAudioFile";

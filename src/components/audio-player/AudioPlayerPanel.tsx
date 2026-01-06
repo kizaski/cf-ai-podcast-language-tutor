@@ -33,7 +33,7 @@ export const AudioPlayerPanel = ({
           break;
         case "transcript-status":
           // TODO -- UI
-          console.log(data.progress);
+          // console.log(data.progress);
           break;
 
         case "insert":
@@ -67,7 +67,7 @@ export const AudioPlayerPanel = ({
           });
           break;
         case "insert-complete":
-          console.log("All inserts generated");
+          // console.log("All inserts generated");
           break;
         case "error":
           // TODO -- UI

@@ -77,13 +77,13 @@ export class Chat extends AIChatAgent<Env> {
         ).isPlaying
       : false;
 
-    let fullTranscript = "No transcript available";
+    let transcriptWindow = "No transcript available";
     try {
-      fullTranscript = await transcriberStub.getTranscriptWindowText(
+      transcriptWindow = await transcriberStub.getTranscriptWindowText(
         currentTime!,
         30
       );
-      console.log(fullTranscript);
+      console.log(transcriptWindow);
     } catch (error) {
       console.error(error);
     }
@@ -135,7 +135,7 @@ Correct language issues gently, using examples from the transcript.
 Keep explanations concise but clear and don't forget to urge the user if podcast status requires it.
 
 CURRENT_AUDIO_CONTEXT:
-${fullTranscript}
+${transcriptWindow}
 `,
           messages: convertToModelMessages(processedMessages),
           model,

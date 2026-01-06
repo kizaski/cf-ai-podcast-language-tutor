@@ -58,7 +58,7 @@ export function useChatAgent({
     const message = agentInput;
     clearAgentInput();
 
-    console.log(extraData);
+    // console.log(extraData);
 
     // Send message to agent
     await chat.sendMessage({

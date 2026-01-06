@@ -3,7 +3,6 @@ import { EmptyAudioPlayer } from "./EmptyAudioPlayer";
 import { AudioPlayerPanelInner } from "./AudioPlayerPanelInner";
 import { type Dispatch, type SetStateAction } from "react";
 import { useAgent } from "agents/react";
-import { useSession } from "@/providers/SessionProvider";
 
 export interface AudioPlayerPanelProps {
   episodeData?: EpisodeData;
@@ -40,7 +39,31 @@ export const AudioPlayerPanel = ({
         case "insert":
           setEpisodeData!((prev) => {
             if (!prev) return prev;
-            return { ...prev, inserts: [...prev.inserts, data.insert] };
+
+            const newInserts = [...prev.inserts, data.insert];
+
+            newInserts.sort((a, b) => {
+              // First, sort by startTime
+              if (a.startTime !== b.startTime) {
+                return a.startTime - b.startTime;
+              }
+
+              // Normalize type: treat primer_intro same as intro, primer_outro same as outro
+              const normalizeType = (type: any): "intro" | "outro" => {
+                if (type.includes("intro")) return "intro";
+                if (type.includes("outro")) return "outro";
+                return type; // fallback if something else appears
+              };
+
+              const typeOrder = { intro: 0, outro: 1 };
+
+              return (
+                typeOrder[normalizeType(a.type)] -
+                typeOrder[normalizeType(b.type)]
+              );
+            });
+
+            return { ...prev, inserts: newInserts };
           });
           break;
         case "insert-complete":

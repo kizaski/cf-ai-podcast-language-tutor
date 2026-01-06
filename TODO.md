@@ -54,7 +54,6 @@
 - Enhance system prompt with optional explanations IF user is not writing in English/native lang (with the help of an llm or API) 
 
 ### Samples / Generation / Tools
-- IMP: Add samples - cached: set up, non-cached TODO 
 - Add optional podcast search tool using the Podwise API  
 - Add tool or similar for getting the whole podcast transcript and asking a question on it (Summarize the whole podcast -> tool call)  
 

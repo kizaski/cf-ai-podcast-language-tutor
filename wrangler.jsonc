@@ -35,11 +35,6 @@
 			}
 		]
 	},
-	"kv_namespaces": [
-		{
-			"binding": "KV"
-		}
-	],
 	"r2_buckets": [
 		{
 			"bucket_name": "audio-tutor-bucket",

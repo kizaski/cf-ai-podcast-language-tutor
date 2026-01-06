@@ -77,61 +77,69 @@ export function EmptyState({ audioFile }: any) {
             <progress className="w-full" value={progress} max={100} />
           )}
 
-          <div className="pt-4 border-t border-amber-700 text-left">
-            <p className="text-muted-foreground text-sm mb-2">
-              Or try a sample:
-            </p>
-            <ul className="text-sm space-y-2">
-              <li className="flex items-center gap-2">
-                <span className="text-[#F48120]">•</span>
-                <span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      navigate(
-                        `/episodes/${import.meta.env.VITE_SAMPLE_EP_1_ID}`
-                      )
-                    }
-                    className="text-sm p-1 outline outline-amber-600 cursor-pointer rounded-lg"
-                  >
-                    Sample {import.meta.env.VITE_SAMPLE_EP_1_TITLE}
-                  </button>
-                </span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="text-[#F48120]">•</span>
-                <span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      navigate(
-                        `/episodes/${import.meta.env.VITE_SAMPLE_EP_2_ID}`
-                      )
-                    }
-                    className="text-sm p-1 outline outline-amber-600 cursor-pointer rounded-lg"
-                  >
-                    Sample {import.meta.env.VITE_SAMPLE_EP_2_TITLE}
-                  </button>
-                </span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="text-[#F48120]">•</span>
-                <span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      navigate(
-                        `/episodes/${import.meta.env.VITE_SAMPLE_EP_3_ID}`
-                      )
-                    }
-                    className="text-sm p-1 outline outline-amber-600 cursor-pointer rounded-lg"
-                  >
-                    Sample {import.meta.env.VITE_SAMPLE_EP_3_TITLE}
-                  </button>
-                </span>
-              </li>
-            </ul>
-          </div>
+          {import.meta.env.VITE_SAMPLE_EP_1_ID && (
+            <div className="pt-4 border-t border-amber-700 text-left">
+              <p className="text-muted-foreground text-sm mb-2">
+                Or try a sample:
+              </p>
+              <ul className="text-sm space-y-2">
+                {import.meta.env.VITE_SAMPLE_EP_1_ID && (
+                  <li className="flex items-center gap-2">
+                    <span className="text-[#F48120]">•</span>
+                    <span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate(
+                            `/episodes/${import.meta.env.VITE_SAMPLE_EP_1_ID}`
+                          )
+                        }
+                        className="text-sm p-1 outline outline-amber-600 cursor-pointer rounded-lg"
+                      >
+                        Sample {import.meta.env.VITE_SAMPLE_EP_1_TITLE}
+                      </button>
+                    </span>
+                  </li>
+                )}
+                {import.meta.env.VITE_SAMPLE_EP_2_ID && (
+                  <li className="flex items-center gap-2">
+                    <span className="text-[#F48120]">•</span>
+                    <span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate(
+                            `/episodes/${import.meta.env.VITE_SAMPLE_EP_2_ID}`
+                          )
+                        }
+                        className="text-sm p-1 outline outline-amber-600 cursor-pointer rounded-lg"
+                      >
+                        Sample {import.meta.env.VITE_SAMPLE_EP_2_TITLE}
+                      </button>
+                    </span>
+                  </li>
+                )}
+                {import.meta.env.VITE_SAMPLE_EP_2_ID && (
+                  <li className="flex items-center gap-2">
+                    <span className="text-[#F48120]">•</span>
+                    <span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate(
+                            `/episodes/${import.meta.env.VITE_SAMPLE_EP_3_ID}`
+                          )
+                        }
+                        className="text-sm p-1 outline outline-amber-600 cursor-pointer rounded-lg"
+                      >
+                        Sample {import.meta.env.VITE_SAMPLE_EP_3_TITLE}
+                      </button>
+                    </span>
+                  </li>
+                )}
+              </ul>
+            </div>
+          )}
         </div>
       </Card>
     </div>

@@ -31,8 +31,8 @@ export async function handleAudioQuery(
     // Full EpisodeData structure
     const episodeData: EpisodeData = {
       episode,
-      inserts: [], // No inserts by default
-      transcript: [] // No transcript by default
+      inserts: [],
+      transcript: []
     };
 
     return new Response(JSON.stringify(episodeData), {
@@ -84,8 +84,6 @@ export async function handleAudioUpload(
 
     // Store file in R2
     const arrayBuffer = await file.arrayBuffer();
-    // const timestamp = Date.now();
-    // const fileNameExtended = `audio-${timestamp}-${file.name}`;
     const fileName = file.name;
     const lastDotIndex = fileName.lastIndexOf(".");
     const fileNameNoExt =

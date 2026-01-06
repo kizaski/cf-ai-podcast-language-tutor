@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export interface Insert {
   id: string;
-  type: "primer_intro" | "primer_outro" | "ad" | "transition";
+  type: "primer_intro" | "primer_outro";
   title: string;
   audioUrl: string;
   duration: number;

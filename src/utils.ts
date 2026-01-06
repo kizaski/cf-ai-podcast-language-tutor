@@ -11,7 +11,10 @@ import { APPROVAL } from "./shared";
 import { parseBuffer } from "music-metadata";
 import type { Phrase, Word } from "./types/audio-types";
 import { toolKeywordRules } from "./tools";
-import type { EpisodeData } from "@/types/audio-types";
+
+//
+// DB Utils
+//
 
 export function setupDatabase(sql: SqlStorage) {
   // Create tables if they don't exist
@@ -49,10 +52,9 @@ export function setupDatabase(sql: SqlStorage) {
   `);
 }
 
-// For inserts generation, not yet used
-const WORDS_PER_MINUTE = 155;
-const MIN_MINUTES = 9;
-export const MIN_WORDS = WORDS_PER_MINUTE * MIN_MINUTES;
+//
+// Audio/base64 Utils
+//
 
 export async function getAudioDuration(
   arrayBuffer: ArrayBuffer,
@@ -65,14 +67,37 @@ export async function getAudioDuration(
   return metadata.format.duration || 0;
 }
 
-export const sendEvent = async (
-  data: unknown,
-  writer: WritableStreamDefaultWriter,
-  encoder?: TextEncoder
-) => {
-  if (!encoder) encoder = new TextEncoder();
-  await writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-};
+export function base64ToUint8Array(base64Audio: string) {
+  if (!base64Audio) {
+    console.error("base64ToUint8Array received empty/undefined input");
+    return new Uint8Array(0);
+  }
+
+  // Strip prefix if present
+  const base64 = base64Audio.includes(",")
+    ? base64Audio.split(",")[1]
+    : base64Audio;
+
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+export function base64ToArrayBuffer(base64Audio: string): ArrayBuffer {
+  const buffer = Buffer.from(base64Audio, "base64");
+  return buffer.buffer.slice(
+    buffer.byteOffset,
+    buffer.byteOffset + buffer.byteLength
+  );
+}
+
+//
+// Transcript Utils
+//
 
 export function extractPhrases(words: Word[]) {
   const phrases: Phrase[] = [];
@@ -155,6 +180,10 @@ function makePhrase(words: Word[]): Phrase {
   };
 }
 
+//
+// Tool Utils
+//
+
 function isValidToolName<K extends PropertyKey, T extends object>(
   key: K,
   obj: T
@@ -162,9 +191,6 @@ function isValidToolName<K extends PropertyKey, T extends object>(
   return key in obj;
 }
 
-//
-// Tools Utils
-//
 type SlotRule = readonly string[];
 type SentenceRule = Record<string, SlotRule>;
 
@@ -346,33 +372,9 @@ export function cleanupMessages(messages: UIMessage[]): UIMessage[] {
   });
 }
 
-export function base64ToUint8Array(base64Audio: string) {
-  if (!base64Audio) {
-    console.error("base64ToUint8Array received empty/undefined input");
-    return new Uint8Array(0);
-  }
-
-  // Strip prefix if present
-  const base64 = base64Audio.includes(",")
-    ? base64Audio.split(",")[1]
-    : base64Audio;
-
-  const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
-
-export function base64ToArrayBuffer(base64Audio: string): ArrayBuffer {
-  const buffer = Buffer.from(base64Audio, "base64");
-  return buffer.buffer.slice(
-    buffer.byteOffset,
-    buffer.byteOffset + buffer.byteLength
-  );
-}
+//
+// Cookie Utils
+//
 
 export function getSessionId(request: Request): string | null {
   const cookieHeader = request.headers.get("Cookie");
@@ -392,36 +394,4 @@ export function getSessionId(request: Request): string | null {
   }
 
   return null;
-}
-
-export function getSampleEpisodes(): EpisodeData[] {
-  const now = new Date().toISOString();
-
-  const sample1: EpisodeData = {
-    episode: {
-      id: "sample-1",
-      title: "Sample Episode One",
-      duration: 0,
-      audioUrl: "/api/r2/sample-1",
-      publishedDate: now,
-      description: "This is a sample episode for testing."
-    },
-    inserts: [],
-    transcript: []
-  };
-
-  const sample2: EpisodeData = {
-    episode: {
-      id: "sample-2",
-      title: "Sample Episode Two",
-      duration: 0,
-      audioUrl: "/api/r2/sample-2",
-      publishedDate: now,
-      description: "Another sample episode."
-    },
-    inserts: [],
-    transcript: []
-  };
-
-  return [sample1, sample2];
 }

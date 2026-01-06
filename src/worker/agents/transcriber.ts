@@ -12,19 +12,14 @@ import {
 } from "@/utils";
 import { Agent, type Connection, type ConnectionContext } from "agents";
 import { env } from "cloudflare:workers";
-import { parseBuffer } from "music-metadata";
 
 interface TranscriberState {
   audioKey: string;
 }
 
-// TODO -- resume (inserts and transcript generation)
-
 // TODO -- rename
 export class Transcriber extends Agent<Env, TranscriberState> {
   private activeInsertTasks = new Set<Promise<void>>();
-  // doesnt work in Chat tool, use Chat agent in-memory vars for its tools and this for this agent's tools
-  isPlayingPodcast = false;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -281,52 +276,6 @@ export class Transcriber extends Agent<Env, TranscriberState> {
     }
     console.log("No cached inserts, generating new inserts for chunk");
     return this.generateInsertsForChunk(audioKey, chunk);
-  }
-
-  private chunkTranscript(
-    segments: TranscriptSegment[],
-    windowSeconds = 60,
-    overlapSeconds = 5
-  ): TranscriptSegment[] {
-    console.log("Chunking transcript segments");
-    if (!segments.length) return [];
-
-    const chunks: TranscriptSegment[] = [];
-    let buffer: TranscriptSegment[] = [];
-    let windowStart = segments[0].startTime;
-
-    for (const seg of segments) {
-      buffer.push(seg);
-      const windowEnd = seg.endTime;
-      const duration = windowEnd - windowStart;
-
-      if (duration >= windowSeconds) {
-        chunks.push({
-          startTime: windowStart,
-          endTime: windowEnd,
-          text: buffer.map((s) => s.text).join(" "),
-          id: "",
-          speaker: ""
-        });
-
-        const cutoff = windowEnd - overlapSeconds;
-        buffer = buffer.filter((s) => s.endTime > cutoff);
-        windowStart = buffer[0]?.startTime ?? windowEnd;
-      }
-    }
-
-    if (buffer.length) {
-      chunks.push({
-        startTime: windowStart,
-        endTime: buffer[buffer.length - 1].endTime,
-        text: buffer.map((s) => s.text).join(" "),
-        id: "",
-        speaker: ""
-      });
-    }
-
-    console.log(`Transcript chunked into ${chunks.length} chunks`);
-    return chunks;
   }
 
   /**

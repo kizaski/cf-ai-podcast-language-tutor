@@ -5,12 +5,8 @@
 - Fix playback seeking
 
 ### Episodes / UI Fixes
-- Remove emptystate card when in /episodes view  
 - Rename /episodes to /episode
 - Loading & Error indicator in Transcript and Inserts
-- Follow transcript
-- Expand / Retract Inserts & Transcript
-- Add volume control; Remove playback speed control (as it may introduce bugs)
 
 ### Transcriber / Backend
 - Move runPipeline in Transciber from onConnect to method, call it conditionally  

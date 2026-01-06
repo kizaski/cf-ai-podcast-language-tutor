@@ -45,8 +45,8 @@ export const PlayerControls = ({
     <div className="bg-neutral-100 dark:bg-neutral-800 rounded-lg p-6 mb-3">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold">
+          <div className="flex items-center gap-3 flex-wrap break-all">
+            <h2 className="text-lg font-semibold flex-wrap wrap-break-word">
               {episodeData.episode.title}
             </h2>
 

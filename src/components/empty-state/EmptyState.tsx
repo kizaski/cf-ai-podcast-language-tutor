@@ -29,9 +29,8 @@ export function EmptyState({ audioFile }: any) {
           <h2 className="mb-2">
             <div className="mb-2">Learn any language through podcasts</div>
             <div className="text-muted-foreground text-sm mb-2">
-              Listen, get real-time explanations + inserted audio clip primers,
-              and build your vocabulary. All while enjoying the original
-              podcast.
+              Listen, get real-time explanations and build your vocabulary. All
+              while enjoying the original podcast.
             </div>
           </h2>
 
@@ -88,10 +87,14 @@ export function EmptyState({ audioFile }: any) {
                 <span>
                   <button
                     type="button"
-                    onClick={() => navigate("/episodes/sample-1")}
+                    onClick={() =>
+                      navigate(
+                        `/episodes/${import.meta.env.VITE_SAMPLE_EP_1_ID}`
+                      )
+                    }
                     className="text-sm p-1 outline outline-amber-600 cursor-pointer rounded-lg"
                   >
-                    Sample 1
+                    Sample {import.meta.env.VITE_SAMPLE_EP_1_TITLE}
                   </button>
                 </span>
               </li>
@@ -100,10 +103,14 @@ export function EmptyState({ audioFile }: any) {
                 <span>
                   <button
                     type="button"
-                    onClick={() => navigate("/episodes/sample-2")}
+                    onClick={() =>
+                      navigate(
+                        `/episodes/${import.meta.env.VITE_SAMPLE_EP_2_ID}`
+                      )
+                    }
                     className="text-sm p-1 outline outline-amber-600 cursor-pointer rounded-lg"
                   >
-                    Sample 2
+                    Sample {import.meta.env.VITE_SAMPLE_EP_2_TITLE}
                   </button>
                 </span>
               </li>
@@ -112,10 +119,14 @@ export function EmptyState({ audioFile }: any) {
                 <span>
                   <button
                     type="button"
-                    onClick={() => navigate("/episodes/sample-3")}
+                    onClick={() =>
+                      navigate(
+                        `/episodes/${import.meta.env.VITE_SAMPLE_EP_3_ID}`
+                      )
+                    }
                     className="text-sm p-1 outline outline-amber-600 cursor-pointer rounded-lg"
                   >
-                    Sample 3
+                    Sample {import.meta.env.VITE_SAMPLE_EP_3_TITLE}
                   </button>
                 </span>
               </li>

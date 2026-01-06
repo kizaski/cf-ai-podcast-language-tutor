@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { AudioPlayerPanelProps } from "./AudioPlayerPanel";
 
 import { PlayerControls } from "./PlayerControls";
@@ -28,6 +28,25 @@ export const AudioPlayerPanelInner = ({
       `/api/r2/${episodeData.episode.audioUrl}`,
       enabledInserts
     );
+
+  /* ---------------- Expand / Reset Inserts and Transcript ---------------- */
+
+  const [expanded, setExpanded] = useState<"both" | "transcript" | "inserts">(
+    "both"
+  );
+
+  // Toggle expansion for a specific panel
+  const handleExpand = (panel: "transcript" | "inserts") => {
+    setExpanded((prev) => {
+      if (prev === panel) return "both"; // if already expanded, collapse to both semi-expanded
+      return panel; // expand the clicked panel
+    });
+  };
+
+  // Reset both panels to semi-expanded view
+  const handleReset = () => {
+    setExpanded("both");
+  };
 
   /* ---------------- Playback state adapter ---------------- */
 
@@ -94,7 +113,7 @@ export const AudioPlayerPanelInner = ({
         <AudioLoadingState isLoading={false} hasLoaded={false} />
       ) : (
         <div className="flex-1 overflow-y-visible">
-          <div className="p-6">
+          <div className="p-6 h-[98vh]">
             <PlayerControls
               episodeData={episodeData}
               playbackState={playbackState}
@@ -112,21 +131,31 @@ export const AudioPlayerPanelInner = ({
               hasLoaded={hasLoaded}
             />
 
-            <InsertsList
-              playbackState={playbackState}
-              inserts={episodeData.inserts}
-              onToggleInsert={handleToggleInsert}
-              onToggleInserts={handleToggleInserts}
-              isLoading={false}
-              onSeek={handleSeek}
-            />
+            <div
+              className={`${expanded === "both" ? "max-h-[90vh]" : "max-h-0"} ${expanded === "inserts" ? "max-h-[50vh]" : ""}`}
+            >
+              <InsertsList
+                playbackState={playbackState}
+                inserts={episodeData.inserts}
+                onToggleInsert={handleToggleInsert}
+                onToggleInserts={handleToggleInserts}
+                isLoading={false}
+                onSeek={handleSeek}
+                expanded={expanded}
+                onExpand={() => handleExpand("inserts")}
+                onReset={handleReset}
+              />
 
-            <Transcript
-              segments={episodeData.transcript}
-              inserts={episodeData.inserts}
-              currentTime={currentTime}
-              onSeek={handleSeek}
-            />
+              <Transcript
+                segments={episodeData.transcript}
+                inserts={episodeData.inserts}
+                currentTime={currentTime}
+                onSeek={handleSeek}
+                expanded={expanded}
+                onExpand={() => handleExpand("transcript")}
+                onReset={handleReset}
+              />
+            </div>
           </div>
         </div>
       )}

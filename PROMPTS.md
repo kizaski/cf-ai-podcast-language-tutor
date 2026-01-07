@@ -87,6 +87,12 @@ onMessage: `code`
 - Handle multiple inserts at same timestamp (queue)
 - Fix Whisper transcription mid-way timestamp reset and cache conflicts
 - Implement generateSamples for RPC function in API handler
+- How do I extract japanese phrases / disable this for japanese?
+  - -> I dont have info on "ja". i want to disable splitting for ja
+  - -> make it split only by 、, ! ?,。 etc `code`
+  - also fix that (disable for japanese, no spaces should be inserted) `code`
+- Make this only enable runPipeline if its not already started for audioKey. Not on connect. `code`
+  - make it also stream for the new connection. code: `code`
 
 ## Architecture Questions / Prompts
 - Extend app to be agentic: chat with LLM + podcast with primer sandwich

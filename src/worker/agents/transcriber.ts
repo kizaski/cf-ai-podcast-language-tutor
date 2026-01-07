@@ -20,6 +20,7 @@ interface TranscriberState {
 // TODO -- rename
 export class Transcriber extends Agent<Env, TranscriberState> {
   private activeInsertTasks = new Set<Promise<void>>();
+  private connections = new Set<Connection>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -31,6 +32,15 @@ export class Transcriber extends Agent<Env, TranscriberState> {
     console.log("Client connected:", connection.url);
     const url = new URL(connection.url || ctx.request?.url || "");
     const audioKey = url.searchParams.get("audioKey"); // TODO -- rm?
+    this.connections.add(connection);
+
+    connection.addEventListener("close", () => {
+      this.connections.delete(connection);
+    });
+
+    connection.addEventListener("error", () => {
+      this.connections.delete(connection);
+    });
 
     if (!audioKey) {
       console.warn("audioKey missing, closing connection");
@@ -39,54 +49,84 @@ export class Transcriber extends Agent<Env, TranscriberState> {
 
     console.log("Setting state audioKey:", audioKey);
     this.setState({ audioKey });
-    connection.send(JSON.stringify({ type: "connected", audioKey }));
+    this.broadcastMsg({ type: "connected", audioKey });
 
     // Start transcription + inserts pipeline
     console.log("Starting pipeline for audioKey:", audioKey);
-    await this.runPipeline(connection, audioKey);
+    this.maybeRunPipeline(connection, audioKey);
+  }
+
+  private async maybeRunPipeline(connection: Connection, audioKey: string) {
+    let existing: { status: string } | undefined;
+
+    try {
+      existing = this.sql<{
+        status: string;
+      }>`
+      SELECT status FROM transcripts WHERE audioKey = ${audioKey}
+    `[0];
+    } catch (e) {
+      console.error("Failed to read transcript status", e);
+    }
+
+    console.log("Transcript status for", audioKey, "=>", existing?.status);
+
+    // Completed -> stream cached data only
+    if (existing?.status === "complete") {
+      return this.streamCachedData(connection, audioKey).catch((err) =>
+        this.sendError(connection, "Failed streaming cached data", err)
+      );
+    }
+
+    // Already running -> stream cached data
+    if (existing?.status === "in_progress") {
+      console.log("Pipeline already running for", audioKey);
+      await this.streamCachedData(connection, audioKey);
+      return;
+    }
+
+    // Not started yet -> atomically start pipeline
+    console.log("Starting pipeline for audioKey:", audioKey);
+
+    try {
+      this.ctx.storage.sql.exec(
+        "INSERT INTO transcripts (audioKey, status) VALUES (?, 'in_progress')",
+        audioKey
+      );
+
+      this.processNewTranscription(connection, audioKey).catch((err) => {
+        this.sendError(connection, "Transcription pipeline failed", err);
+      });
+    } catch (e) {
+      // Another connection raced us and won
+      console.log("Pipeline start race lost for", audioKey);
+    }
   }
 
   onError(connection: Connection, error?: any) {
     console.error(error);
-    // connection.send(JSON.stringify({ type: "error", error: error }));
+    // this.broadcast({ type: "error", error: error });
   }
 
   onException(connection: Connection, error?: any) {
     console.error(error);
-    // connection.send(JSON.stringify({ type: "error", error: error }));
+    // this.broadcast({ type: "error", error: error });
+  }
+
+  private broadcastMsg(message: any) {
+    const payload = JSON.stringify(message);
+    for (const conn of this.connections) {
+      try {
+        conn.send(payload);
+      } catch {
+        this.connections.delete(conn);
+      }
+    }
   }
 
   private sendError(connection: Connection, message: string, details?: any) {
     console.error(message, details);
-    connection.send(
-      JSON.stringify({ type: "error", message, details: details?.toString() })
-    );
-  }
-
-  async runPipeline(connection: Connection, audioKey: string) {
-    let existing;
-    try {
-      existing = this.sql<{
-        status: string;
-      }>`SELECT status
-      FROM transcripts 
-      WHERE audioKey = ${audioKey}`[0];
-    } catch (error) {
-      console.log(error);
-    }
-
-    console.log("Existing transcript status:", existing?.status);
-    if (existing?.status === "complete") {
-      console.log("Streaming cached data for audioKey:", audioKey);
-      return this.streamCachedData(connection, audioKey).catch((err) => {
-        this.sendError(connection, "Failed streaming cached data", err);
-      });
-    }
-
-    console.log("Processing new transcription for audioKey:", audioKey);
-    this.processNewTranscription(connection, audioKey).catch((err) => {
-      this.sendError(connection, "Transcription pipeline failed", err);
-    });
+    this.broadcastMsg({ type: "error", message, details: details?.toString() });
   }
 
   private async streamCachedData(connection: Connection, audioKey: string) {
@@ -97,42 +137,33 @@ export class Transcriber extends Agent<Env, TranscriberState> {
 
     console.log(`Streaming ${segments.length} cached segments`);
     segments.forEach((s) =>
-      connection.send(JSON.stringify({ type: "transcript", transcript: s }))
+      this.broadcastMsg({ type: "transcript", transcript: s })
     );
 
     const inserts = this
       .sql<Insert>`SELECT * FROM inserts WHERE audioKey = ${audioKey} ORDER BY startTime ASC`;
     console.log(`Streaming ${inserts.length} cached inserts`);
-    inserts.forEach((i) =>
-      connection.send(JSON.stringify({ type: "insert", insert: i }))
-    );
+    inserts.forEach((i) => this.broadcastMsg({ type: "insert", insert: i }));
 
     console.log("All inserts streamed");
-    connection.send(JSON.stringify({ type: "insert-complete" }));
+    this.broadcastMsg({ type: "insert-complete" });
   }
 
   private async processNewTranscription(
     connection: Connection,
     audioKey: string
   ) {
-    console.log("Inserting in_progress transcript record for:", audioKey);
     const db = this.ctx.storage.sql;
-    db.exec(
-      "INSERT OR IGNORE INTO transcripts (audioKey, status) VALUES (?, 'in_progress')",
-      audioKey
-    );
 
     let currentBuffer: TranscriptSegment[] = [];
     let currentWordCount = 0;
 
     let transcriptionProgress = 0;
-    connection.send(
-      JSON.stringify({
-        type: "transcript-status",
-        status: "transcribing",
-        progress: transcriptionProgress
-      })
-    );
+    this.broadcastMsg({
+      type: "transcript-status",
+      status: "transcribing",
+      progress: transcriptionProgress
+    });
 
     for await (const result of this.transcribe(audioKey)) {
       if (!result) return;
@@ -152,9 +183,7 @@ export class Transcriber extends Agent<Env, TranscriberState> {
         console.log("Saving segment:", segment.id);
         this.saveSegment(audioKey, segment);
 
-        connection.send(
-          JSON.stringify({ type: "transcript", transcript: segment })
-        );
+        this.broadcastMsg({ type: "transcript", transcript: segment });
 
         currentBuffer.push(segment);
         currentWordCount += segment.text.length;
@@ -171,13 +200,11 @@ export class Transcriber extends Agent<Env, TranscriberState> {
       }
 
       transcriptionProgress++;
-      connection.send(
-        JSON.stringify({
-          type: "transcript-status",
-          status: "transcribing",
-          progress: transcriptionProgress
-        })
-      );
+      this.broadcastMsg({
+        type: "transcript-status",
+        status: "transcribing",
+        progress: transcriptionProgress
+      });
     }
 
     if (currentBuffer.length > 0) {
@@ -191,7 +218,7 @@ export class Transcriber extends Agent<Env, TranscriberState> {
       "UPDATE transcripts SET status='complete' WHERE audioKey=?",
       audioKey
     );
-    connection.send(JSON.stringify({ type: "insert-complete" }));
+    this.broadcastMsg({ type: "insert-complete" });
   }
 
   private triggerBackgroundInsert(
@@ -215,7 +242,7 @@ export class Transcriber extends Agent<Env, TranscriberState> {
       .then((inserts) => {
         inserts.forEach((insert) => {
           console.log("Streaming generated insert:", insert.id);
-          connection.send(JSON.stringify({ type: "insert", insert }));
+          this.broadcastMsg({ type: "insert", insert });
         });
       })
       .catch((err) => {

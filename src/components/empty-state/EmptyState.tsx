@@ -18,7 +18,11 @@ export function EmptyState({ audioFile }: any) {
 
   return (
     <div className="h-full w-full flex items-center justify-center">
-      <Card className="p-6 max-w-md mx-auto bg-neutral-100 dark:bg-neutral-900">
+      <Card
+        className={`p-6 ${
+          import.meta.env.VITE_SAMPLE_EP_1_ID ? "w-lg" : "w-md"
+        } bg-neutral-100 dark:bg-neutral-900`}
+      >
         <div className="text-center space-y-4">
           <div className="bg-[#F48120]/10 text-[#F48120] rounded-full p-3 inline-flex">
             <Robot size={24} />
@@ -26,9 +30,9 @@ export function EmptyState({ audioFile }: any) {
 
           <h3 className="font-semibold text-lg">Welcome to Podcast Tutor</h3>
 
-          <h2 className="mb-2">
+          <h2 className="flex flex-col mb-2 justify-center">
             <div className="mb-2">Learn any language through podcasts</div>
-            <div className="text-muted-foreground text-sm mb-2">
+            <div className="text-muted-foreground text-sm mb-2 w-9/12 mx-auto">
               Listen, get real-time explanations and build your vocabulary. All
               while enjoying the original podcast.
             </div>
@@ -81,121 +85,133 @@ export function EmptyState({ audioFile }: any) {
             Importnant! Enable autoplay.
           </div>
 
-          <div className="pt-4 border-t border-amber-700 text-left">
-            <p className="text-muted-foreground text-sm mb-2">
-              Recommended (download and upload):
-            </p>
-            <ul className="text-sm space-y-2">
-              <li className="flex items-center gap-2">
-                <span className="text-[#F48120]">•</span>
-                <a
-                  className="underline text-blue-400"
-                  href="https://podcastindex.org/podcast/143170"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Deutsch lernen durch Hören
-                </a>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="text-[#F48120]">•</span>
-                <a
-                  className="underline text-blue-400"
-                  href="https://podcastindex.org/podcast/6409524"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  The Dutch Historian Geschiedenis Podcast
-                </a>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="text-[#F48120]">•</span>
-                <a
-                  className="underline text-blue-400"
-                  href="https://podcastindex.org/podcast/743692"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  La Story by: Les Echos
-                </a>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="text-[#F48120]">•</span>
-                <a
-                  className="underline text-blue-400"
-                  href="https://podcastindex.org/podcast/3563812"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  ゆる言語学ラジオ
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          {import.meta.env.VITE_SAMPLE_EP_1_ID && (
-            <div className="pt-4 border-t border-amber-700 text-left">
+          <div
+            className={`flex ${
+              import.meta.env.VITE_SAMPLE_EP_1_ID ? "flex-row" : "flex-col"
+            } pt-4 border-t border-amber-700 text-left`}
+          >
+            <div
+              className={`flex flex-col px-4 ${
+                import.meta.env.VITE_SAMPLE_EP_1_ID
+                  ? "border-r border-amber-700"
+                  : ""
+              }`}
+            >
               <p className="text-muted-foreground text-sm mb-2">
-                Or try a sample:
+                Recommended (download and upload):
               </p>
               <ul className="text-sm space-y-2">
-                {import.meta.env.VITE_SAMPLE_EP_1_ID && (
-                  <li className="flex items-center gap-2">
-                    <span className="text-[#F48120]">•</span>
-                    <span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          navigate(
-                            `/episodes/${import.meta.env.VITE_SAMPLE_EP_1_ID}`
-                          )
-                        }
-                        className="text-sm p-1 outline outline-amber-600 cursor-pointer rounded-lg"
-                      >
-                        Sample {import.meta.env.VITE_SAMPLE_EP_1_TITLE}
-                      </button>
-                    </span>
-                  </li>
-                )}
-                {import.meta.env.VITE_SAMPLE_EP_2_ID && (
-                  <li className="flex items-center gap-2">
-                    <span className="text-[#F48120]">•</span>
-                    <span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          navigate(
-                            `/episodes/${import.meta.env.VITE_SAMPLE_EP_2_ID}`
-                          )
-                        }
-                        className="text-sm p-1 outline outline-amber-600 cursor-pointer rounded-lg"
-                      >
-                        Sample {import.meta.env.VITE_SAMPLE_EP_2_TITLE}
-                      </button>
-                    </span>
-                  </li>
-                )}
-                {import.meta.env.VITE_SAMPLE_EP_2_ID && (
-                  <li className="flex items-center gap-2">
-                    <span className="text-[#F48120]">•</span>
-                    <span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          navigate(
-                            `/episodes/${import.meta.env.VITE_SAMPLE_EP_3_ID}`
-                          )
-                        }
-                        className="text-sm p-1 outline outline-amber-600 cursor-pointer rounded-lg"
-                      >
-                        Sample {import.meta.env.VITE_SAMPLE_EP_3_TITLE}
-                      </button>
-                    </span>
-                  </li>
-                )}
+                <li className="flex items-center gap-2">
+                  <span className="text-[#F48120]">•</span>
+                  <a
+                    className="underline text-blue-400"
+                    href="https://podcastindex.org/podcast/143170"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Deutsch lernen durch Hören
+                  </a>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-[#F48120]">•</span>
+                  <a
+                    className="underline text-blue-400"
+                    href="https://podcastindex.org/podcast/6409524"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    The Dutch Historian Geschiedenis
+                  </a>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-[#F48120]">•</span>
+                  <a
+                    className="underline text-blue-400"
+                    href="https://podcastindex.org/podcast/743692"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    La Story by: Les Echos
+                  </a>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-[#F48120]">•</span>
+                  <a
+                    className="underline text-blue-400"
+                    href="https://podcastindex.org/podcast/3563812"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    ゆる言語学ラジオ
+                  </a>
+                </li>
               </ul>
             </div>
-          )}
+
+            {import.meta.env.VITE_SAMPLE_EP_1_ID && (
+              <div className="px-4 text-left">
+                <p className="text-muted-foreground text-sm mb-2">
+                  Or try a sample:
+                </p>
+                <ul className="text-sm space-y-2">
+                  {import.meta.env.VITE_SAMPLE_EP_1_ID && (
+                    <li className="flex items-center gap-2">
+                      <span className="text-[#F48120]">•</span>
+                      <span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate(
+                              `/episodes/${import.meta.env.VITE_SAMPLE_EP_1_ID}`
+                            )
+                          }
+                          className="text-sm p-1 outline outline-amber-600 cursor-pointer rounded-lg"
+                        >
+                          {import.meta.env.VITE_SAMPLE_EP_1_TITLE}
+                        </button>
+                      </span>
+                    </li>
+                  )}
+                  {import.meta.env.VITE_SAMPLE_EP_2_ID && (
+                    <li className="flex items-center gap-2">
+                      <span className="text-[#F48120]">•</span>
+                      <span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate(
+                              `/episodes/${import.meta.env.VITE_SAMPLE_EP_2_ID}`
+                            )
+                          }
+                          className="text-sm p-1 outline outline-amber-600 cursor-pointer rounded-lg"
+                        >
+                          {import.meta.env.VITE_SAMPLE_EP_2_TITLE}
+                        </button>
+                      </span>
+                    </li>
+                  )}
+                  {import.meta.env.VITE_SAMPLE_EP_2_ID && (
+                    <li className="flex items-center gap-2">
+                      <span className="text-[#F48120]">•</span>
+                      <span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate(
+                              `/episodes/${import.meta.env.VITE_SAMPLE_EP_3_ID}`
+                            )
+                          }
+                          className="text-sm p-1 outline outline-amber-600 cursor-pointer rounded-lg"
+                        >
+                          {import.meta.env.VITE_SAMPLE_EP_3_TITLE}
+                        </button>
+                      </span>
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
+          </div>
         </div>
       </Card>
     </div>

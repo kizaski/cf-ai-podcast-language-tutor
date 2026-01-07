@@ -103,34 +103,42 @@ export function extractPhrases(words: Word[]) {
   const phrases: Phrase[] = [];
   let current: Word[] = [];
 
+  const isJapanese = looksJapanese(words);
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
     current.push(w);
 
-    const next = words[i + 1];
-    const duration = current[current.length - 1].end - current[0].start;
-    const wordCount = current.length;
-
     let shouldSplit = false;
 
-    // 1. Hard boundary: pause
-    if (next && next.start - w.end >= 0.6) {
-      shouldSplit = true;
-    }
+    if (isJapanese) {
+      // Japanese: split ONLY on punctuation
+      if (/[、。！？!?]$/.test(w.word)) {
+        shouldSplit = true;
+      }
+    } else {
+      const next = words[i + 1];
+      const duration = current[current.length - 1].end - current[0].start;
+      const wordCount = current.length;
 
-    // 2. Hard boundary: terminal punctuation
-    if (/[.!?]$/.test(w.word)) {
-      shouldSplit = true;
-    }
+      // 1. Hard boundary: pause
+      if (next && next.start - w.end >= 0.6) {
+        shouldSplit = true;
+      }
 
-    // 3. Soft boundary: clause punctuation
-    if (/,|;|:$/.test(w.word) && duration >= 2.5 && wordCount >= 5) {
-      shouldSplit = true;
-    }
+      // 2. Hard boundary: terminal punctuation
+      if (/[.!?]$/.test(w.word)) {
+        shouldSplit = true;
+      }
 
-    // 4. Safety caps
-    if (duration >= 7 || wordCount >= 25) {
-      shouldSplit = true;
+      // 3. Soft boundary: clause punctuation
+      if (/,|;|:$/.test(w.word) && duration >= 2.5 && wordCount >= 5) {
+        shouldSplit = true;
+      }
+
+      // 4. Safety caps
+      if (duration >= 7 || wordCount >= 25) {
+        shouldSplit = true;
+      }
     }
 
     if (shouldSplit) {
@@ -154,15 +162,20 @@ function makePhrase(words: Word[]): Phrase {
   const start = words[0].start;
   const end = words[words.length - 1].end;
 
-  // Normalize text:
-  // - single spaces
-  // - no space before punctuation
-  // - preserve ASR punctuation if present
-  const text = words
-    .map((w) => w.word)
-    .join(" ")
-    .replace(/\s+([,.!?;:])/g, "$1")
-    .trim();
+  const isJapanese = looksJapanese(words);
+
+  const text = isJapanese
+    ? // Japanese: NO spaces, preserve punctuation as-is
+      words
+        .map((w) => w.word)
+        .join("")
+        .trim()
+    : // Non-Japanese: normalize spaces + punctuation
+      words
+        .map((w) => w.word)
+        .join(" ")
+        .replace(/\s+([,.!?;:])/g, "$1")
+        .trim();
 
   const id =
     "p_" +
@@ -178,6 +191,12 @@ function makePhrase(words: Word[]): Phrase {
     wordCount: words.length,
     words
   };
+}
+
+function looksJapanese(words: Word[]): boolean {
+  return words.some((w) =>
+    /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(w.word)
+  );
 }
 
 //

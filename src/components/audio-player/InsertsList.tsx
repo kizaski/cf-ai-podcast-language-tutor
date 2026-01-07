@@ -44,7 +44,7 @@ export const InsertsList = ({
               onClick={onReset}
               className="rounded-lg p-1.5 text-md bg-blue-600 dark:bg-blue-800 text-white"
             >
-              Reset
+              Retract
             </button>
           )}
         </div>

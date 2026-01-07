@@ -77,6 +77,45 @@ export function EmptyState({ audioFile }: any) {
             <progress className="w-full" value={progress} max={100} />
           )}
 
+          <div className="pt-4 border-t border-amber-700 text-left">
+            <p className="text-muted-foreground text-sm mb-2">Recommended:</p>
+            <ul className="text-sm space-y-2">
+              <li className="flex items-center gap-2">
+                <span className="text-[#F48120]">•</span>
+                <a
+                  className="underline text-blue-400"
+                  href="https://podcastindex.org/podcast/143170"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Deutsch lernen durch Hören
+                </a>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-[#F48120]">•</span>
+                <a
+                  className="underline text-blue-400"
+                  href="https://podcastindex.org/podcast/6409524"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  The Dutch Historian Geschiedenis Podcast
+                </a>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-[#F48120]">•</span>
+                <a
+                  className="underline text-blue-400"
+                  href="https://podcastindex.org/podcast/3563812"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  ゆる言語学ラジオ
+                </a>
+              </li>
+            </ul>
+          </div>
+
           {import.meta.env.VITE_SAMPLE_EP_1_ID && (
             <div className="pt-4 border-t border-amber-700 text-left">
               <p className="text-muted-foreground text-sm mb-2">

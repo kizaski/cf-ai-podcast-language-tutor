@@ -130,23 +130,34 @@ export class Transcriber extends Agent<Env, TranscriberState> {
   }
 
   private async streamCachedData(connection: Connection, audioKey: string) {
-    console.log("Fetching segments from DB for audioKey:", audioKey);
+    console.log("Fetching cached data for audioKey:", audioKey);
+
     const segments = this.sql<TranscriptSegment>`
-      SELECT text, startTime, endTime, id, speaker 
-      FROM segments WHERE audioKey = ${audioKey} ORDER BY startTime ASC`;
+      SELECT text, startTime, endTime, id, speaker
+      FROM segments
+      WHERE audioKey = ${audioKey}
+      ORDER BY startTime ASC
+    `;
 
-    console.log(`Streaming ${segments.length} cached segments`);
-    segments.forEach((s) =>
-      this.broadcastMsg({ type: "transcript", transcript: s })
-    );
+    for (const segment of segments) {
+      connection.send(
+        JSON.stringify({ type: "transcript", transcript: segment })
+      );
+    }
 
-    const inserts = this
-      .sql<Insert>`SELECT * FROM inserts WHERE audioKey = ${audioKey} ORDER BY startTime ASC`;
-    console.log(`Streaming ${inserts.length} cached inserts`);
-    inserts.forEach((i) => this.broadcastMsg({ type: "insert", insert: i }));
+    const inserts = this.sql<Insert>`
+      SELECT *
+      FROM inserts
+      WHERE audioKey = ${audioKey}
+      ORDER BY startTime ASC
+    `;
 
-    console.log("All inserts streamed");
-    this.broadcastMsg({ type: "insert-complete" });
+    for (const insert of inserts) {
+      connection.send(JSON.stringify({ type: "insert", insert }));
+    }
+
+    // Important: tell THIS connection replay is done
+    connection.send(JSON.stringify({ type: "insert-complete" }));
   }
 
   private async processNewTranscription(

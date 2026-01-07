@@ -77,6 +77,10 @@ export function EmptyState({ audioFile }: any) {
             <progress className="w-full" value={progress} max={100} />
           )}
 
+          <div className="pt-4 border-t border-amber-700 text-center">
+            Importnant! Enable autoplay.
+          </div>
+
           <div className="pt-4 border-t border-amber-700 text-left">
             <p className="text-muted-foreground text-sm mb-2">Recommended:</p>
             <ul className="text-sm space-y-2">

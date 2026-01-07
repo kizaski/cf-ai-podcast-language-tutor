@@ -24,7 +24,7 @@ export function ChatView({
   const { episode, fetchEpisode, setEpisode } = useEpisode({});
   const audioFileState = useAudioFile();
   const audioFile = { props: audioFileState };
-
+  const [showBottomMessage, setShowBottomMessage] = useState(true);
   const [showDebug, setShowDebug] = useState(false);
 
   const {
@@ -107,6 +107,28 @@ export function ChatView({
             setEpisodeData={setEpisode}
           />
         )}
+      </div>
+
+      <div
+        className={`fixed ${showBottomMessage ? "bottom-0" : "-bottom-20"} transition-all duration-300 ease-in-out left-0 right-0 flex items-center justify-between bg-yellow-200 text-black p-3 border-t border-yellow-300 z-50`}
+      >
+        <div className="w-full max-w-7xl mx-auto flex items-center">
+          <div className="w-10 opacity-0">×</div>
+          <div className="flex-1 flex justify-center items-center">
+            <div className="flex items-center">
+              <span className="font-medium">
+                Important! Enable autoplay for inserted clips to work properly.
+              </span>
+            </div>
+          </div>
+          <button
+            className="w-10 flex justify-center font-bold text-red-500 hover:text-red-700 text-lg transition-colors"
+            onClick={() => setShowBottomMessage(false)}
+            aria-label="Dismiss message"
+          >
+            ×
+          </button>
+        </div>
       </div>
     </div>
   );

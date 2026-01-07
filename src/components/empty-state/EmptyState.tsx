@@ -82,7 +82,9 @@ export function EmptyState({ audioFile }: any) {
           </div>
 
           <div className="pt-4 border-t border-amber-700 text-left">
-            <p className="text-muted-foreground text-sm mb-2">Recommended:</p>
+            <p className="text-muted-foreground text-sm mb-2">
+              Recommended (download and upload):
+            </p>
             <ul className="text-sm space-y-2">
               <li className="flex items-center gap-2">
                 <span className="text-[#F48120]">•</span>

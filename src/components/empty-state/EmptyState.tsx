@@ -110,6 +110,17 @@ export function EmptyState({ audioFile }: any) {
                 <span className="text-[#F48120]">•</span>
                 <a
                   className="underline text-blue-400"
+                  href="https://podcastindex.org/podcast/743692"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  La Story by: Les Echos
+                </a>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-[#F48120]">•</span>
+                <a
+                  className="underline text-blue-400"
                   href="https://podcastindex.org/podcast/3563812"
                   target="_blank"
                   rel="noopener noreferrer"

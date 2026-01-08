@@ -190,7 +190,7 @@ export function EmptyState({ audioFile }: any) {
                       </span>
                     </li>
                   )}
-                  {import.meta.env.VITE_SAMPLE_EP_2_ID && (
+                  {import.meta.env.VITE_SAMPLE_EP_3_ID && (
                     <li className="flex items-center gap-2">
                       <span className="text-[#F48120]">•</span>
                       <span>

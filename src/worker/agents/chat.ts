@@ -137,7 +137,13 @@ Keep explanations concise but clear and don't forget to urge the user if podcast
 CURRENT_AUDIO_CONTEXT:
 ${transcriptWindow}
 `,
-          messages: convertToModelMessages(processedMessages),
+          messages: processedMessages.map(msg => ({
+            role: msg.role,
+            content: msg.parts
+              ?.filter(p => p.type === "text")
+              .map(p => p.text)
+              .join("") ?? ""
+          })),
           model,
           tools: allAllowedTools,
           // Type boundary: streamText expects specific tool types, but base class uses ToolSet

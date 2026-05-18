@@ -49,6 +49,10 @@ export const usePodcastWithInserts = (
 
     podcastSoundRef.current = podcastSound;
 
+    // Do NOT auto-play the podcast just because it loaded.
+    // Wait for the user to explicitly call `play()`.
+    // podcastSound.play(); 
+
     return () => {
       podcastSound.unload();
     };
@@ -65,9 +69,10 @@ export const usePodcastWithInserts = (
   const resumePodcast = useCallback(() => {
     isInsertPlayingRef.current = false;
     activeInsertIdRef.current = null;
-    podcastSoundRef.current?.play();
-    setIsPlaying(true);
-  }, []);
+    if (isPlaying) {
+      podcastSoundRef.current?.play();
+    }
+  }, [isPlaying]);
 
   // Lazy-load insert Howl only when needed
   const checkInsertTriggers = useCallback(
@@ -79,73 +84,88 @@ export const usePodcastWithInserts = (
         const tolerance = 0.3;
 
         if (
-          // isSeekingRef.current && // skip during manual seek
-          time >= insert.startTime &&
-          time <= insert.startTime + tolerance &&
-          !hasPlayed &&
-          !isInsertPlayingRef.current
-        ) {
-          // Load Howl if not already loaded
-          if (!insertSoundsRef.current.has(insert.id)) {
-            const sound = new Howl({
-              src: [`/api/r2/${insert.audioUrl}`],
-              preload: true,
-              html5: true,
-              volume
-            });
-            insertSoundsRef.current.set(insert.id, sound);
-          }
+          isSeekingRef.current || 
+          time < insert.startTime ||
+          time > insert.startTime + tolerance ||
+          hasPlayed ||
+          isInsertPlayingRef.current
+        )
+          return;
 
-          const sound = insertSoundsRef.current.get(insert.id);
-          if (!sound) return;
-
-          // Mark insert as played
-          insertHasPlayedRef.current.set(insert.id, true);
-
-          isInsertPlayingRef.current = true;
-          activeInsertIdRef.current = insert.id;
-
-          // Pause podcast and play insert
-          podcastSoundRef.current?.pause();
-          setIsPlaying(false);
-
-          sound.play();
-
-          // Resume podcast when insert ends
-          sound.once("end", () => {
-            resumePodcast();
-            sound.unload();
-            insertSoundsRef.current.delete(insert.id);
+        // Load Howl if not already loaded
+        if (!insertSoundsRef.current.has(insert.id)) {
+          const sound = new Howl({
+            src: [`/api/r2/${insert.audioUrl}`],
+            preload: true,
+            html5: true,
+            volume
           });
-          sound.once("stop", () => {
-            resumePodcast();
-            sound.unload();
-            insertSoundsRef.current.delete(insert.id);
-          });
+          insertSoundsRef.current.set(insert.id, sound);
         }
+
+        const sound = insertSoundsRef.current.get(insert.id);
+        if (!sound) return;
+
+        // Mark insert as played
+        insertHasPlayedRef.current.set(insert.id, true);
+
+        isInsertPlayingRef.current = true;
+        activeInsertIdRef.current = insert.id;
+
+        // Pause podcast and play insert
+        podcastSoundRef.current?.pause();
+        
+        // We do NOT call setIsPlaying(false) here, because the podcast
+        // is technically still "playing" from the user's perspective.
+        // It's just paused to allow an insert to play.
+
+        sound.play();
+
+        // Resume podcast when insert ends
+        sound.once("end", () => {
+          if (!isInsertPlayingRef.current) return; // Ignore if stop was called
+          resumePodcast();
+          sound.unload();
+          insertSoundsRef.current.delete(insert.id);
+        });
+        sound.once("stop", () => {
+          // Do not resume podcast if stop was called
+          sound.unload();
+          insertSoundsRef.current.delete(insert.id);
+        });
       });
     },
     [inserts, resumePodcast, volume]
   );
 
+
   // Throttle insert checks (4x per second)
   useEffect(() => {
     const interval = setInterval(() => {
-      if (podcastSoundRef.current && !isInsertPlayingRef.current) {
+      if (podcastSoundRef.current) {
         const time = podcastSoundRef.current.seek() as number;
-        setCurrentTime((prev) => (prev !== time ? time : prev));
-        checkInsertTriggers(time);
+        
+        // Update time only if podcast is playing or seeking
+        if (isPlaying || isSeekingRef.current) {
+          setCurrentTime((prev) => (prev !== time ? time : prev));
+        }
+
+        if (isPlaying && !isInsertPlayingRef.current) {
+          checkInsertTriggers(time);
+        }
       }
     }, 250);
 
     return () => clearInterval(interval);
-  }, [checkInsertTriggers]);
+  }, [checkInsertTriggers, isPlaying]);
 
   // Play/pause handlers
   const play = () => {
     if (!podcastSoundRef.current) return;
-    podcastSoundRef.current.play();
     setIsPlaying(true);
+    if (!isInsertPlayingRef.current) {
+      podcastSoundRef.current.play();
+    }
   };
 
   const pause = () => {

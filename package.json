@@ -8,7 +8,7 @@
 		"dev": "vite dev",
 		"start": "vite dev",
 		"deploy": "vite build && wrangler deploy",
-		"test": "vitest",
+		"test": "vitest run",
 		"types": "wrangler types env.d.ts --include-runtime false",
 		"format": "prettier --write .",
 		"check": "prettier . --check && biome lint && tsc",
@@ -24,7 +24,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.7",
 		"@cloudflare/vite-plugin": "^1.37.1",
-		"@cloudflare/vitest-pool-workers": "^0.16.6",
+		"@cloudflare/vitest-pool-workers": "^0.16.9",
 		"@cloudflare/workers-types": "^4.20251126.0",
 		"@tailwindcss/vite": "^4.1.17",
 		"@types/howler": "^2.2.12",
@@ -38,7 +38,7 @@
 		"tailwindcss": "^4.1.17",
 		"typescript": "^5.9.3",
 		"vite": "^7.2.4",
-		"vitest": "3.2.4",
+		"vitest": "^4.1.7",
 		"wrangler": "^4.56.0"
 	},
 	"dependencies": {
